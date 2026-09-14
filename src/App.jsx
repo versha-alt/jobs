@@ -7,6 +7,8 @@ import { CountUp, EASE, Icon, timeAgo } from './components/ui.jsx';
 import Searches from './components/Searches.jsx';
 import Triggers from './components/Triggers.jsx';
 import Runs from './components/Runs.jsx';
+import RunJobs from './components/RunJobs.jsx';
+import JobDetail from './components/JobDetail.jsx';
 import Settings from './components/Settings.jsx';
 
 const TABS = [
@@ -91,6 +93,8 @@ export default function App() {
   const [runs, setRuns] = useState(null);
   const [health, setHealth] = useState(null);
   const [highlightRunId, setHighlightRunId] = useState(null);
+  const [jobsRunId, setJobsRunId] = useState(null);
+  const [jobView, setJobView] = useState(null);
   const lastSeen = useRef(new Date().toISOString());
 
   const loadCountries = useCallback(async () => {
@@ -142,6 +146,8 @@ export default function App() {
     return () => clearInterval(t);
   }, [loadCountries, loadSearches, loadTriggers, loadRuns]);
 
+  // poll for finished-run toasts fast while something is in flight
+  const hasActiveRuns = (runs ?? []).some((r) => r.status === 'running');
   useEffect(() => {
     const t = setInterval(async () => {
       try {
@@ -167,9 +173,9 @@ export default function App() {
       } catch {
         /* server offline */
       }
-    }, 8000);
+    }, hasActiveRuns ? 2000 : 8000);
     return () => clearInterval(t);
-  }, []);
+  }, [hasActiveRuns]);
 
   const reloadAll = () => {
     loadSearches();
@@ -214,67 +220,93 @@ export default function App() {
 
         <StatsBar searches={searches} triggers={triggers} runs={runs} />
 
-        <nav className="tabs">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              className={`tab${tab === t.id ? ' active' : ''}`}
-              onClick={() => setTab(t.id)}
-            >
-              <Icon name={t.icon} size={14} /> {t.label}
-              {tab === t.id && (
-                <motion.span className="tab-line" layoutId="tab-line" transition={{ duration: 0.25, ease: EASE }} />
-              )}
-            </button>
-          ))}
-        </nav>
+        {jobView ? (
+          <JobDetail
+            runId={jobView.runId}
+            jobRef={{ source: jobView.source, jobId: jobView.jobId }}
+            onBack={() => setJobView(null)}
+          />
+        ) : jobsRunId ? (
+          <RunJobs
+            runId={jobsRunId}
+            onBack={() => setJobsRunId(null)}
+            onOpenJob={(run, job) =>
+              setJobView({ runId: run.id, source: job.source, jobId: job.job_id })
+            }
+            searchLabel={
+              ((searches ?? []).find((s) => s.id === (runs ?? []).find((r) => r.id === jobsRunId)?.search_id) ?? {})
+                .keywords?.join(', ') ?? ''
+            }
+          />
+        ) : (
+          <>
+            <nav className="tabs">
+              {TABS.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  className={`tab${tab === t.id ? ' active' : ''}`}
+                  onClick={() => setTab(t.id)}
+                >
+                  <Icon name={t.icon} size={14} /> {t.label}
+                  {tab === t.id && (
+                    <motion.span className="tab-line" layoutId="tab-line" transition={{ duration: 0.25, ease: EASE }} />
+                  )}
+                </button>
+              ))}
+            </nav>
 
-        <main className="main">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={tab}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.18, ease: EASE }}
-            >
-              {tab === 'searches' && (
-                <Searches
-                  countries={countries}
-                  searches={searches}
-                  loading={searches === null}
-                  reload={loadSearches}
-                />
-              )}
+            <main className="main">
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={tab}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.18, ease: EASE }}
+                >
+                  {tab === 'searches' && (
+                    <Searches
+                      countries={countries}
+                      searches={searches}
+                      loading={searches === null}
+                      reload={loadSearches}
+                    />
+                  )}
 
-              {tab === 'scheduling' && (
-                <Triggers
-                  searches={searches ?? []}
-                  triggers={triggers}
-                  loading={triggers === null}
-                  reload={loadTriggers}
-                  goToListSearches={() => setTab('searches')}
-                  onRunStarted={switchToRuns}
-                />
-              )}
+                  {tab === 'scheduling' && (
+                    <Triggers
+                      searches={searches ?? []}
+                      triggers={triggers}
+                      loading={triggers === null}
+                      reload={loadTriggers}
+                      goToListSearches={() => setTab('searches')}
+                      onRunStarted={switchToRuns}
+                    />
+                  )}
 
-              {tab === 'runs' && (
-                <Runs
-                  runs={runs}
-                  loading={runs === null}
-                  reload={loadRuns}
-                  searches={searches ?? []}
-                  highlightRunId={highlightRunId}
-                />
-              )}
+                  {tab === 'runs' && (
+                    <Runs
+                      runs={runs}
+                      loading={runs === null}
+                      reload={loadRuns}
+                      searches={searches ?? []}
+                      highlightRunId={highlightRunId}
+                      onOpenJobs={(run) => setJobsRunId(run.id)}
+                      onOpenJob={(run, job) =>
+                        setJobView({ runId: run.id, source: job.source, jobId: job.job_id })
+                      }
+                    />
+                  )}
 
-              {tab === 'settings' && (
-                <Settings countries={countries} reload={loadCountries} />
-              )}
-            </motion.div>
-          </AnimatePresence>
-        </main>
+                  {tab === 'settings' && (
+                    <Settings countries={countries} reload={loadCountries} />
+                  )}
+                </motion.div>
+              </AnimatePresence>
+            </main>
+          </>
+        )}
 
         <ToastHost />
       </div>

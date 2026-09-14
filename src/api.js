@@ -35,6 +35,8 @@ export const api = {
   runs: {
     list: (limit = 50) => req('GET', `/api/runs?limit=${limit}`),
     get: (id) => req('GET', `/api/runs/${id}`),
+    job: (runId, source, jobId) =>
+      req('GET', `/api/runs/${runId}/jobs/${source}/${encodeURIComponent(jobId)}`),
     since: (iso) => req('GET', `/api/runs?since=${encodeURIComponent(iso)}&limit=20`),
     remove: (id) => req('DELETE', `/api/runs/${id}`),
   },

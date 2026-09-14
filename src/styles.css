@@ -1232,3 +1232,160 @@ a:hover {
     transform: rotate(360deg);
   }
 }
+
+/* ----- Jobs listing page ----- */
+.jobs-page-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.jobs-page-title h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.jobs-page-kw {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.jobs-page-jobs {
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.jobs-page-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.jobs-page-note {
+  font-size: 13px;
+  color: var(--muted);
+  background: var(--surface-2);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 14px;
+}
+
+.jobs-page-card {
+  padding: 6px 16px 10px;
+  overflow-x: auto;
+}
+
+.tag-new {
+  margin-left: 8px;
+  background: rgba(46, 204, 113, 0.12);
+  color: #27ae60;
+  font-size: 11px;
+  font-weight: 600;
+  vertical-align: 1px;
+}
+
+.empty-card {
+  padding: 26px;
+  text-align: center;
+  color: var(--muted);
+  margin-top: 14px;
+}
+
+/* ----- Job detail page ----- */
+.jd-row-click {
+  cursor: pointer;
+}
+
+.jd-row-click:hover td {
+  background: var(--surface-2);
+}
+
+.jd-title-link {
+  color: var(--text);
+}
+
+.jd-row-click:hover .jd-title-link {
+  text-decoration: underline;
+}
+
+.jobs-hint {
+  font-size: 12px;
+  margin-left: 4px;
+}
+
+.jd-title-text {
+  font-size: 19px;
+}
+
+.jd-apply {
+  text-decoration: none;
+}
+
+.jd-sub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 2px 0 12px;
+}
+
+.jd-company {
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.jd-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.jd-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 12px 18px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+}
+
+.jd-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.jd-field-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.jd-field-value {
+  font-size: 13.5px;
+  color: var(--text);
+}
+
+.jd-site {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 14px;
+}
+
+.jd-desc-card {
+  padding: 16px 18px;
+}
+
+.jd-desc {
+  white-space: pre-wrap;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--text-2);
+}

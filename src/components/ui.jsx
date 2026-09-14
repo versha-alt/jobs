@@ -211,6 +211,8 @@ const ICONS = {
   globe: <path d="M12 3a9 9 0 100 18 9 9 0 000-18zM3 12h18M12 3c3 3.5 3 14.5 0 18-3-3.5-3-14.5 0-18z" />,
   zap: <path d="M13 3L5 13h5l-1 8 8-10h-5l1-8z" />,
   alert: <path d="M12 3l10 17H2L12 3zm0 7v5m0 3h.01" />,
+  list: <path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01" />,
+  back: <path d="M19 12H5m0 0l6-6m-6 6l6 6" />,
 };
 
 export function Icon({ name, size = 16 }) {

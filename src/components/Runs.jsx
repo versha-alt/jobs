@@ -25,7 +25,7 @@ function DeliveryBadge({ delivery }) {
   return <span className="pill pill-err">{delivery}</span>;
 }
 
-function RunCard({ run, searchLabel, onDeleted, highlighted }) {
+function RunCard({ run, searchLabel, onDeleted, onOpenJobs, onOpenJob, highlighted }) {
   const [open, setOpen] = useState(false);
   const [jobs, setJobs] = useState(null);
   const [loadingJobs, setLoadingJobs] = useState(false);
@@ -87,11 +87,17 @@ function RunCard({ run, searchLabel, onDeleted, highlighted }) {
       className={`card run-card${hasError ? ' run-error' : ''}${quiet ? ' run-quiet' : ''}${highlighted ? ' run-highlight' : ''}`}
     >
       <div className="run-head" onClick={() => setOpen(!open)}>
-        <span className={`dot dot-${hasError ? 'error' : 'ok'}`} />
+        <span
+          className={`dot dot-${hasError ? 'error' : 'ok'}${
+            run.status === 'running' ? ' dot-pulse' : ''
+          }`}
+        />
         <span className="run-label">{run.module === 'linkedin' ? 'LinkedIn' : 'Upwork'}</span>
         <span className="run-count">
           {failed ? (
             <span className="err-text">failed</span>
+          ) : run.status === 'running' ? (
+            <span className="muted">running…</span>
           ) : (
             <>
               <CountUp value={run.new_jobs_count} /> new
@@ -100,6 +106,18 @@ function RunCard({ run, searchLabel, onDeleted, highlighted }) {
         </span>
         {searchLabel && <span className="meta run-search">{searchLabel}</span>}
         <span className="muted run-time">{timeAgo(run.finished_at || run.started_at)}</span>
+        <button
+          type="button"
+          className="btn btn-icon btn-ghost"
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenJobs(run);
+          }}
+          aria-label="View job listing"
+          title="View job listing"
+        >
+          <Icon name="list" />
+        </button>
         <button
           type="button"
           className={`btn btn-icon ${confirming ? 'btn-danger' : 'btn-ghost'}`}
@@ -151,7 +169,11 @@ function RunCard({ run, searchLabel, onDeleted, highlighted }) {
               </thead>
               <tbody>
                 {jobs.map((j) => (
-                  <tr key={`${j.source}_${j.job_id}`}>
+                  <tr
+                    key={`${j.source}_${j.job_id}`}
+                    className={onOpenJob ? 'jd-row jd-row-click' : 'jd-row'}
+                    onClick={onOpenJob ? () => onOpenJob(run, j) : undefined}
+                  >
                     <td>{j.title}</td>
                     <td>{j.company}</td>
                     <td>{j.location}</td>
@@ -182,10 +204,13 @@ function RunCard({ run, searchLabel, onDeleted, highlighted }) {
   );
 }
 
-export default function Runs({ runs, loading, reload, searches = [], highlightRunId }) {
+export default function Runs({ runs, loading, reload, searches = [], highlightRunId, onOpenJobs, onOpenJob }) {
   const [moduleFilter, setModuleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [removedIds, setRemovedIds] = useState(() => new Set());
+
+  // poll fast while a run is in flight so its status lands within ~2s
+  const refreshMs = (runs ?? []).some((r) => r.status === 'running') ? 2000 : 10000;
 
   const handleDeleted = (id) => setRemovedIds((prev) => new Set(prev).add(id));
 
@@ -200,9 +225,9 @@ export default function Runs({ runs, loading, reload, searches = [], highlightRu
   }, [highlightRunId, reload]);
 
   useEffect(() => {
-    const t = setInterval(reload, 10000);
+    const t = setInterval(reload, refreshMs);
     return () => clearInterval(t);
-  }, [reload]);
+  }, [reload, refreshMs]);
 
   const searchMap = useMemo(
     () => Object.fromEntries((searches ?? []).map((s) => [s.id, s.keywords.join(', ')])),
@@ -282,6 +307,8 @@ export default function Runs({ runs, loading, reload, searches = [], highlightRu
                       run={r}
                       searchLabel={searchMap[r.search_id] ?? ''}
                       onDeleted={handleDeleted}
+                      onOpenJobs={onOpenJobs}
+                      onOpenJob={onOpenJob}
                       highlighted={r.id === highlightRunId}
                     />
                   </motion.div>

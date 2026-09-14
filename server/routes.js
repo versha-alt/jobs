@@ -63,6 +63,25 @@ r.get('/modules', (_req, res) => {
   );
 });
 
+r.get('/runs/:id/jobs/:source/:jobId', wrap(async (req, res) => {
+  const { id, source, jobId } = req.params;
+  const row = await get(
+    'SELECT id, all_jobs, new_jobs, raw_jobs FROM runs WHERE id = ?',
+    [id]
+  );
+  if (!row) return res.status(404).json({ error: 'Run not found' });
+  const all = row.all_jobs ? JSON.parse(row.all_jobs) : [];
+  const fresh = JSON.parse(row.new_jobs || '[]');
+  const raws = row.raw_jobs ? JSON.parse(row.raw_jobs) : [];
+  const job =
+    all.find((j) => j.job_id === jobId && j.source === source) ??
+    fresh.find((j) => j.job_id === jobId && j.source === source) ??
+    null;
+  const raw = raws.find((r) => String(r.id) === jobId) ?? null;
+  if (!job && !raw) return res.status(404).json({ error: 'Job not found in this run' });
+  res.json({ job, raw });
+}));
+
 r.get('/health', (_req, res) => {
   res.json({
     ok: true,
@@ -227,11 +246,15 @@ r.get('/runs', wrap(async (req, res) => {
 
 r.get('/runs/:id', wrap(async (req, res) => {
   const row = await get(
-    'SELECT id, trigger_id, module, search_id, status, total_found, new_jobs_count, delivery, error, new_jobs, started_at, finished_at FROM runs WHERE id = ?',
+    'SELECT id, trigger_id, module, search_id, status, total_found, new_jobs_count, delivery, error, new_jobs, all_jobs, started_at, finished_at FROM runs WHERE id = ?',
     [req.params.id]
   );
   if (!row) return res.status(404).json({ error: 'Run not found' });
-  res.json({ ...row, new_jobs: JSON.parse(row.new_jobs) });
+  res.json({
+    ...row,
+    new_jobs: JSON.parse(row.new_jobs || '[]'),
+    all_jobs: row.all_jobs ? JSON.parse(row.all_jobs) : null,
+  });
 }));
 
 r.delete('/runs/:id', wrap(async (req, res) => {

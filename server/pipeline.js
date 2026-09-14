@@ -25,7 +25,13 @@ export function normalize(module, pairs, search) {
 
 export function applyTimeFilter(jobs, timeFilter) {
   const cutoff = cutoffIso(timeFilter);
-  return jobs.filter((j) => !j.posted_date || j.posted_date >= cutoff);
+  return jobs.filter((j) => {
+    if (!j.posted_date) return true;
+    // some sources return date-only stamps ("2026-09-13"), which parse to
+    // midnight — compare by day so same-window jobs aren't dropped
+    const posted = j.posted_date.length === 10 ? j.posted_date : j.posted_date.slice(0, 10);
+    return posted >= cutoff.slice(0, 10);
+  });
 }
 
 export async function dedupe(jobs) {

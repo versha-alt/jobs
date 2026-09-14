@@ -71,10 +71,26 @@ async function bootstrap() {
       delivery VARCHAR(255) NULL,
       error TEXT NULL,
       new_jobs MEDIUMTEXT NOT NULL,
+      all_jobs MEDIUMTEXT NULL,
+      raw_jobs MEDIUMTEXT NULL,
       started_at VARCHAR(40) NOT NULL,
       finished_at VARCHAR(40) NULL
     )
   `);
+
+  // older installs created runs without the full listing columns
+  const runCols = await all(
+    `SELECT COLUMN_NAME AS col FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'runs'`,
+    [dbName]
+  );
+  if (runCols.length > 0) {
+    if (!runCols.some((c) => c.col === 'all_jobs')) {
+      await run('ALTER TABLE runs ADD COLUMN all_jobs MEDIUMTEXT NULL AFTER new_jobs');
+    }
+    if (!runCols.some((c) => c.col === 'raw_jobs')) {
+      await run('ALTER TABLE runs ADD COLUMN raw_jobs MEDIUMTEXT NULL AFTER all_jobs');
+    }
+  }
 
   const row = await get('SELECT COUNT(*) AS c FROM countries');
   if (Number(row.c) === 0) {

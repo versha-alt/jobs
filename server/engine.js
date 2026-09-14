@@ -12,8 +12,8 @@ export function isRunning(triggerId) {
 
 export async function insertRun(record) {
   await run(
-    `INSERT INTO runs (id, trigger_id, module, search_id, status, total_found, new_jobs_count, delivery, error, new_jobs, started_at, finished_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO runs (id, trigger_id, module, search_id, status, total_found, new_jobs_count, delivery, error, new_jobs, all_jobs, started_at, finished_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       record.id,
       record.trigger_id,
@@ -25,6 +25,7 @@ export async function insertRun(record) {
       record.delivery,
       record.error,
       record.new_jobs,
+      record.all_jobs ?? '[]',
       record.started_at,
       record.finished_at,
     ]
@@ -33,9 +34,20 @@ export async function insertRun(record) {
 
 export async function updateRun(runId, f) {
   await run(
-    `UPDATE runs SET status = ?, total_found = ?, new_jobs_count = ?, delivery = ?, error = ?, new_jobs = ?, finished_at = ?
+    `UPDATE runs SET status = ?, total_found = ?, new_jobs_count = ?, delivery = ?, error = ?, new_jobs = ?, all_jobs = ?, raw_jobs = ?, finished_at = ?
      WHERE id = ?`,
-    [f.status, f.total_found, f.new_jobs_count, f.delivery, f.error, f.new_jobs, f.finished_at, runId]
+    [
+      f.status,
+      f.total_found,
+      f.new_jobs_count,
+      f.delivery,
+      f.error,
+      f.new_jobs,
+      f.all_jobs ?? '[]',
+      f.raw_jobs ?? '[]',
+      f.finished_at,
+      runId,
+    ]
   );
 }
 
@@ -106,6 +118,8 @@ export async function runSearchOnce({ runId, triggerId, module, search, moduleIn
       delivery,
       error: null,
       new_jobs: JSON.stringify(fresh.slice(0, 500)),
+      all_jobs: JSON.stringify(normalized.slice(0, 500)),
+      raw_jobs: JSON.stringify(pairs.slice(0, 500).map((p) => p.item)),
       finished_at: nowIso(),
     });
     return { runId, totalFound, newJobs: fresh.length, delivery };

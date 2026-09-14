@@ -40,7 +40,7 @@ Copy `.env.example` to `.env` and fill in:
 
 ```ini
 APIFY_TOKEN=                  # from console.apify.com → Settings → API & Integrations
-APIFY_LINKEDIN_ACTOR_ID=      # e.g. bebity/linkedin-jobs-scraper
+APIFY_LINKEDIN_ACTOR_ID=      # e.g. curious_coder/linkedin-jobs-scraper
 APIFY_UPWORK_ACTOR_ID=        # your preferred Upwork scraper actor
 TELEGRAM_BOT_TOKEN=           # from @BotFather
 TELEGRAM_CHAT_ID=             # message the bot, then check getUpdates
