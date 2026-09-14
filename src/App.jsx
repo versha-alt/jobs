@@ -90,6 +90,7 @@ export default function App() {
   const [triggers, setTriggers] = useState(null);
   const [runs, setRuns] = useState(null);
   const [health, setHealth] = useState(null);
+  const [highlightRunId, setHighlightRunId] = useState(null);
   const lastSeen = useRef(new Date().toISOString());
 
   const loadCountries = useCallback(async () => {
@@ -176,6 +177,17 @@ export default function App() {
     loadRuns();
   };
 
+  const switchToRuns = useCallback(
+    (runId) => {
+      setHighlightRunId(runId);
+      setTab('runs');
+      loadRuns();
+      setTimeout(loadRuns, 1200);
+      setTimeout(loadRuns, 3000);
+    },
+    [loadRuns]
+  );
+
   return (
     <MotionConfig reducedMotion="user">
       <div className="shell">
@@ -243,6 +255,7 @@ export default function App() {
                   loading={triggers === null}
                   reload={loadTriggers}
                   goToListSearches={() => setTab('searches')}
+                  onRunStarted={switchToRuns}
                 />
               )}
 
@@ -252,6 +265,7 @@ export default function App() {
                   loading={runs === null}
                   reload={loadRuns}
                   searches={searches ?? []}
+                  highlightRunId={highlightRunId}
                 />
               )}
 

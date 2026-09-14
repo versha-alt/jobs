@@ -13,11 +13,12 @@ Keyword-based LinkedIn & Upwork job monitoring via Apify scrapers, delivered as 
 
 | Layer     | Tech                                                        |
 | --------- | ----------------------------------------------------------- |
-| Backend   | Node.js ≥ 22.5, Express, built-in `node:sqlite` (no native deps) |
+| Backend   | Node.js ≥ 22.5, Express 4, MySQL (mysql2 pool) |
 | Frontend  | React 18 + Vite + Framer Motion (animated chips, skeletons, live countdowns, toasts) |
 | Scraping  | `apify-client` — calls your chosen LinkedIn / Upwork actors  |
-| Delivery  | Telegram Bot API `sendDocument` (CSV attachment)             |
-| Storage   | SQLite file at `data/app.db` (countries, searches, triggers, seen_jobs, runs) |
+| Delivery  | Telegram Bot API `sendMessage` — per-run text summary |
+| Storage   | MySQL (`job_app` database): countries, searches, triggers, seen_jobs, runs |
+| History   | `data/app.db` — pre-migration SQLite backup (read-only) |
 
 ## Setup
 
@@ -43,10 +44,17 @@ APIFY_LINKEDIN_ACTOR_ID=      # e.g. bebity/linkedin-jobs-scraper
 APIFY_UPWORK_ACTOR_ID=        # your preferred Upwork scraper actor
 TELEGRAM_BOT_TOKEN=           # from @BotFather
 TELEGRAM_CHAT_ID=             # message the bot, then check getUpdates
+MYSQL_HOST=localhost
+MYSQL_PORT=3306
+MYSQL_USER=root
+MYSQL_PASSWORD=
+MYSQL_DATABASE=job_app
 PORT=8787
 ```
 
-**Mock mode:** if `APIFY_TOKEN` is empty the app runs with fake job data (shown as "Apify mock mode" in the header) so you can exercise the full pipeline — scheduling, dedup, CSV generation — at zero cost. CSVs are still written to `data/exports/`; delivery is marked "not configured" until Telegram keys are set.
+**MySQL:** the database and tables are created automatically on first boot. To import history from a pre-migration SQLite backup, run `node scripts/migrate-sqlite-to-mysql.mjs` (idempotent — clears target tables first, then copies countries, searches, triggers, seen_jobs and runs).
+
+**Telegram summaries:** after each successful run with at least 1 fetched job, a text summary is sent (platform, search keywords, fetched count, new-after-dedup count). Failed runs and 0-fetch runs stay silent. If Telegram is not configured, results are still stored — the run is just marked `not_configured`.
 
 > **Note on actor inputs:** every Apify actor has its own input schema and output shape. The input builders and item parsers live in one isolated place per module — `server/modules/linkedin.js` and `server/modules/upwork.js` — so you can adapt the mapping to your chosen actor without touching the rest of the pipeline. Both modules always apply the search's time filter as a post-fetch fallback (`server/pipeline.js`) even when the actor lacks a native recency parameter.
 
@@ -55,11 +63,11 @@ PORT=8787
 1. A scheduled trigger fires (or you click **Run now**).
 2. The module loads its linked search (keywords, countries, tags, time filter) and calls its Apify actor.
 3. Results are normalized to the shared job format `{ title, company, location, source, url, posted_date, job_id, tags, matched_keywords }`.
-4. Jobs older than the search's time window are dropped (fallback filter); seen `job_id`s are discarded via the persistent `seen_jobs` store.
-5. New jobs are written to `data/exports/<module>_jobs_YYYY-MM-DD_HHMM.csv` and sent to Telegram via `sendDocument` with a caption (module, count, run time).
-6. Zero new jobs → no CSV, no Telegram message. Sent job IDs are recorded so nothing repeats.
+4. Jobs older than the search's time window are dropped (fallback filter); seen `job_id`s are discarded via the persistent `seen_jobs` table.
+5. If jobs were fetched, a Telegram text summary is sent (platform, keywords, fetched count, new count).
+6. Zero-fetch runs stay silent (no message). Sent job IDs are recorded so nothing repeats.
 
-Each module produces its own CSV and its own delivery, so LinkedIn and Upwork stay distinguishable.
+Each module produces its own run record and its own delivery, so LinkedIn and Upwork stay distinguishable.
 
 ## API
 

@@ -9,9 +9,23 @@ export function apifyClient() {
   return client;
 }
 
-export async function runActor(actorId, input) {
+export async function runActor(actorId, input, timeoutMs = 10 * 60 * 1000) {
   const c = apifyClient();
-  const run = await c.actor(actorId).call(input);
-  const { items } = await c.dataset(run.defaultDatasetId).listItems();
-  return items ?? [];
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`Actor run timed out after ${Math.round(timeoutMs / 60000)} minutes`)),
+      timeoutMs
+    );
+  });
+  const call = (async () => {
+    const run = await c.actor(actorId).call(input);
+    const { items } = await c.dataset(run.defaultDatasetId).listItems();
+    return items ?? [];
+  })();
+  try {
+    return await Promise.race([call, timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
 }

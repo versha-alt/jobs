@@ -4,18 +4,19 @@ import { api } from '../api.js';
 import { toast } from '../toast.js';
 import {
   ChipInput,
-  Collapsible,
   EASE,
   EmptyState,
   Icon,
+  Modal,
   Segmented,
   SkeletonList,
+  Spinner,
   useShake,
 } from './ui.jsx';
 
 export const TIME_LABELS = { day: 'Last 24 hours', week: 'Last week', month: 'Last month' };
 
-export function SearchForm({ initial, countries, onDone, onCancel }) {
+export function SearchForm({ mode = 'create', initial, countries, onDone, onCancel }) {
   const [keywords, setKeywords] = useState(initial?.keywords ?? []);
   const [locations, setLocations] = useState(initial?.locations ?? []);
   const [timeFilter, setTimeFilter] = useState(initial?.time_filter ?? 'week');
@@ -35,9 +36,11 @@ export function SearchForm({ initial, countries, onDone, onCancel }) {
     setSaving(true);
     try {
       const body = { keywords, locations, time_filter: timeFilter, tags };
-      if (initial) await api.searches.update(initial.id, body);
+      if (mode === 'edit') await api.searches.update(initial.id, body);
       else await api.searches.create(body);
-      toast.success(initial ? 'Search updated' : 'Search saved');
+      toast.success(
+        mode === 'edit' ? 'Search updated' : mode === 'duplicate' ? 'Search duplicated' : 'Search saved'
+      );
       onDone();
     } catch (err) {
       toast.error(err.message);
@@ -112,7 +115,8 @@ export function SearchForm({ initial, countries, onDone, onCancel }) {
 
       <div className="form-actions">
         <button type="submit" className="btn btn-primary" disabled={saving}>
-          {saving ? 'Saving…' : initial ? 'Save changes' : 'Save search'}
+          {saving && <Spinner />}
+          {saving ? 'Saving…' : mode === 'edit' ? 'Save changes' : mode === 'duplicate' ? 'Save copy' : 'Save search'}
         </button>
         {onCancel && (
           <button type="button" className="btn btn-ghost" onClick={onCancel}>
@@ -124,7 +128,7 @@ export function SearchForm({ initial, countries, onDone, onCancel }) {
   );
 }
 
-function SearchCard({ search, countries, expanded, onToggle, onChanged }) {
+function SearchCard({ search, onEdit, onDuplicate, onChanged }) {
   const [confirming, setConfirming] = useState(false);
 
   const remove = async () => {
@@ -145,20 +149,28 @@ function SearchCard({ search, countries, expanded, onToggle, onChanged }) {
   return (
     <motion.div layout className="card">
       <div className="card-head">
-        <button type="button" className="card-title card-title-btn" onClick={onToggle}>
+        <button type="button" className="card-title card-title-btn" onClick={onEdit}>
           <Icon name="search" />
           <span>{search.keywords.join(', ')}</span>
         </button>
         <div className="card-actions">
           <button
             type="button"
-            className={`btn btn-ghost btn-icon${expanded ? ' active' : ''}`}
-            onClick={onToggle}
+            className="btn btn-ghost btn-icon"
+            onClick={onEdit}
+            title="Edit search"
             aria-label="Edit search"
           >
-            <motion.span animate={{ rotate: expanded ? 90 : 0 }}>
-              <Icon name="chevron" />
-            </motion.span>
+            <Icon name="edit" />
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost btn-icon"
+            onClick={onDuplicate}
+            title="Duplicate search"
+            aria-label="Duplicate search"
+          >
+            <Icon name="copy" />
           </button>
           <button
             type="button"
@@ -179,27 +191,13 @@ function SearchCard({ search, countries, expanded, onToggle, onChanged }) {
           </span>
         ))}
       </div>
-      <Collapsible open={expanded}>
-        <div className="card-body">
-          <SearchForm
-            initial={search}
-            countries={countries}
-            onDone={() => {
-              onToggle();
-              onChanged();
-            }}
-            onCancel={onToggle}
-          />
-        </div>
-      </Collapsible>
     </motion.div>
   );
 }
 
 export default function Searches({ countries, searches, loading, reload }) {
-  const [creating, setCreating] = useState(false);
+  const [modal, setModal] = useState(null);
   const [query, setQuery] = useState('');
-  const [expandedId, setExpandedId] = useState(null);
 
   const q = query.trim().toLowerCase();
   const filtered = (searches ?? []).filter((s) => {
@@ -209,6 +207,12 @@ export default function Searches({ countries, searches, loading, reload }) {
       .toLowerCase()
       .includes(q);
   });
+
+  const closeModal = () => setModal(null);
+  const modalTitle =
+    modal?.mode === 'create' ? 'New search' : modal?.mode === 'duplicate' ? 'Duplicate search' : 'Edit search';
+  const modalSubtitle =
+    modal && modal.mode !== 'create' ? modal.search.keywords.join(', ') : 'Keywords, countries, recency window and tags';
 
   return (
     <div>
@@ -220,27 +224,14 @@ export default function Searches({ countries, searches, loading, reload }) {
           </span>
           <button
             type="button"
-            className={`btn ${creating ? 'btn-ghost' : 'btn-primary'}`}
-            onClick={() => setCreating(!creating)}
+            className="btn btn-primary"
+            onClick={() => setModal({ mode: 'create' })}
           >
-            <Icon name={creating ? 'x' : 'plus'} size={14} />
-            {creating ? 'Close' : 'New search'}
+            <Icon name="plus" size={14} />
+            New search
           </button>
         </div>
       </div>
-
-      <Collapsible open={creating}>
-        <div className="card card-body form-card">
-          <SearchForm
-            countries={countries}
-            onDone={() => {
-              setCreating(false);
-              reload();
-            }}
-            onCancel={() => setCreating(false)}
-          />
-        </div>
-      </Collapsible>
 
       {loading ? (
         <SkeletonList rows={2} />
@@ -250,7 +241,7 @@ export default function Searches({ countries, searches, loading, reload }) {
           title="No saved searches yet"
           hint="Create your first search — keywords, countries, recency window and tags."
           action={
-            <button type="button" className="btn btn-primary" onClick={() => setCreating(true)}>
+            <button type="button" className="btn btn-primary" onClick={() => setModal({ mode: 'create' })}>
               New search
             </button>
           }
@@ -294,9 +285,8 @@ export default function Searches({ countries, searches, loading, reload }) {
                   >
                     <SearchCard
                       search={s}
-                      countries={countries}
-                      expanded={expandedId === s.id}
-                      onToggle={() => setExpandedId(expandedId === s.id ? null : s.id)}
+                      onEdit={() => setModal({ mode: 'edit', search: s })}
+                      onDuplicate={() => setModal({ mode: 'duplicate', search: s })}
                       onChanged={reload}
                     />
                   </motion.div>
@@ -306,6 +296,27 @@ export default function Searches({ countries, searches, loading, reload }) {
           )}
         </>
       )}
+
+      <Modal
+        open={Boolean(modal)}
+        title={modalTitle}
+        subtitle={modalSubtitle}
+        onClose={closeModal}
+      >
+        {modal && (
+          <SearchForm
+            key={`${modal.mode}_${modal.search?.id ?? 'new'}`}
+            mode={modal.mode}
+            initial={modal.mode === 'create' ? undefined : modal.search}
+            countries={countries}
+            onDone={() => {
+              closeModal();
+              reload();
+            }}
+            onCancel={closeModal}
+          />
+        )}
+      </Modal>
     </div>
   );
 }

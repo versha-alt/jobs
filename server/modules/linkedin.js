@@ -30,6 +30,7 @@ export const linkedinModule = {
       ...(countries.length ? { locations: countries } : {}),
       publishedAt: PUBLISHED_AT[search.time_filter] || PUBLISHED_AT.week,
       rows,
+      cookies: config.linkedinCookies,
     };
     const items = await runActor(this.actorId(), input);
     return items.map((item) => ({

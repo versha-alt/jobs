@@ -177,6 +177,16 @@ a:hover {
   align-items: start;
 }
 
+.stack .card {
+  cursor: pointer;
+}
+
+.stack .card:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent-border);
+  box-shadow: var(--shadow);
+}
+
 .run-list {
   display: flex;
   flex-direction: column;
@@ -560,8 +570,8 @@ a:hover {
 }
 
 .seg-btn.active {
-  background: var(--surface);
-  color: var(--text);
+  background: var(--accent);
+  color: #fff;
   box-shadow: var(--shadow-sm);
 }
 
@@ -1087,6 +1097,23 @@ a:hover {
   opacity: 0.68;
 }
 
+.run-highlight {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-tint);
+  animation: highlight-in 0.5s ease;
+}
+
+@keyframes highlight-in {
+  0% {
+    transform: scale(0.99);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
 .run-search {
   max-width: 320px;
   overflow: hidden;
@@ -1115,5 +1142,93 @@ a:hover {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(15, 17, 21, 0.55);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 6vh 20px;
+  overflow-y: auto;
+}
+
+.modal-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  width: 100%;
+  max-width: 560px;
+  box-shadow: 0 24px 64px rgba(15, 17, 21, 0.28);
+  display: flex;
+  flex-direction: column;
+  max-height: 86vh;
+}
+
+.modal-panel.wide {
+  max-width: 640px;
+}
+
+.modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 22px 14px;
+  border-bottom: 1px solid var(--border);
+  flex: none;
+}
+
+.modal-title {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.modal-subtitle {
+  color: var(--muted);
+  font-size: 12.5px;
+  margin-top: 3px;
+  max-width: 420px;
+}
+
+.modal-scroll {
+  padding: 18px 22px 20px;
+  overflow-y: auto;
+}
+
+.modal-scroll .form-actions {
+  position: sticky;
+  bottom: -20px;
+  margin: 18px -22px -20px;
+  padding: 14px 22px 18px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+}
+
+.spinner {
+  width: 13px;
+  height: 13px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  display: inline-block;
+  animation: spin 0.7s linear infinite;
+  flex: none;
+}
+
+.btn-ghost .spinner {
+  border-color: var(--border-strong);
+  border-top-color: var(--accent);
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
   }
 }

@@ -19,13 +19,13 @@ function DeliveryBadge({ delivery }) {
   if (!delivery || delivery === 'skipped') {
     return <span className="pill pill-muted">no new jobs</span>;
   }
-  if (delivery === 'sent') return <span className="pill pill-ok">CSV sent to Telegram</span>;
+  if (delivery === 'sent') return <span className="pill pill-ok">Summary sent to Telegram</span>;
   if (delivery === 'not_configured') return <span className="pill pill-warn">Telegram not configured</span>;
   if (delivery.startsWith('failed')) return <span className="pill pill-err">Delivery failed</span>;
   return <span className="pill pill-err">{delivery}</span>;
 }
 
-function RunCard({ run, searchLabel, onDeleted }) {
+function RunCard({ run, searchLabel, onDeleted, highlighted }) {
   const [open, setOpen] = useState(false);
   const [jobs, setJobs] = useState(null);
   const [loadingJobs, setLoadingJobs] = useState(false);
@@ -82,7 +82,10 @@ function RunCard({ run, searchLabel, onDeleted }) {
   const hasError = Boolean(failure);
 
   return (
-    <motion.div layout className={`card run-card${hasError ? ' run-error' : ''}${quiet ? ' run-quiet' : ''}`}>
+    <motion.div
+      layout
+      className={`card run-card${hasError ? ' run-error' : ''}${quiet ? ' run-quiet' : ''}${highlighted ? ' run-highlight' : ''}`}
+    >
       <div className="run-head" onClick={() => setOpen(!open)}>
         <span className={`dot dot-${hasError ? 'error' : 'ok'}`} />
         <span className="run-label">{run.module === 'linkedin' ? 'LinkedIn' : 'Upwork'}</span>
@@ -179,12 +182,22 @@ function RunCard({ run, searchLabel, onDeleted }) {
   );
 }
 
-export default function Runs({ runs, loading, reload, searches = [] }) {
+export default function Runs({ runs, loading, reload, searches = [], highlightRunId }) {
   const [moduleFilter, setModuleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [removedIds, setRemovedIds] = useState(() => new Set());
 
   const handleDeleted = (id) => setRemovedIds((prev) => new Set(prev).add(id));
+
+  useEffect(() => {
+    if (!highlightRunId) return;
+    reload();
+    const t = setTimeout(() => {
+      const el = document.getElementById(`run-${highlightRunId}`);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 400);
+    return () => clearTimeout(t);
+  }, [highlightRunId, reload]);
 
   useEffect(() => {
     const t = setInterval(reload, 10000);
@@ -269,6 +282,7 @@ export default function Runs({ runs, loading, reload, searches = [] }) {
                       run={r}
                       searchLabel={searchMap[r.search_id] ?? ''}
                       onDeleted={handleDeleted}
+                      highlighted={r.id === highlightRunId}
                     />
                   </motion.div>
                 ))}

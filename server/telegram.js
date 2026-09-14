@@ -1,20 +1,22 @@
-import fs from 'node:fs';
-import path from 'node:path';
 import { config } from './config.js';
 
 export function telegramConfigured() {
   return Boolean(config.telegramBotToken && config.telegramChatId);
 }
 
-export async function sendCsvDocument(filePath, caption) {
-  const buf = await fs.promises.readFile(filePath);
-  const form = new FormData();
-  form.append('chat_id', config.telegramChatId);
-  form.append('caption', caption);
-  form.append('document', new Blob([buf], { type: 'text/csv' }), path.basename(filePath));
-  const res = await fetch(`https://api.telegram.org/bot${config.telegramBotToken}/sendDocument`, {
+export async function sendRunSummary({ moduleLabel, keywords, totalFound, newCount }) {
+  const text = [
+    `${moduleLabel} run complete`,
+    '',
+    `Search: ${keywords.join(', ')}`,
+    `Fetched: ${totalFound} job${totalFound === 1 ? '' : 's'}`,
+    `New (after dedup): ${newCount}`,
+  ].join('\n');
+
+  const res = await fetch(`https://api.telegram.org/bot${config.telegramBotToken}/sendMessage`, {
     method: 'POST',
-    body: form,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: config.telegramChatId, text }),
   });
   const json = await res.json().catch(() => ({}));
   if (!res.ok || json.ok === false) {

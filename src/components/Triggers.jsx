@@ -4,22 +4,17 @@ import { api } from '../api.js';
 import { toast } from '../toast.js';
 import {
   ChipInput,
-  Collapsible,
   Countdown,
   EASE,
   EmptyState,
   Icon,
+  Modal,
   Segmented,
   SkeletonList,
+  Spinner,
   StatusDot,
   useShake,
 } from './ui.jsx';
-
-const FREQ_SUMMARY = {
-  hourly: (t) => `Every hour at :${t.split(':')[1]}`,
-  daily: (t) => `Every day at ${t}`,
-  weekly: (t, d) => `${formatDays(d)} at ${t}`,
-};
 
 const DAY_NAMES = { 1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat', 7: 'Sun' };
 
@@ -27,7 +22,14 @@ function formatDays(days) {
   return (days ?? []).map((d) => DAY_NAMES[d]).join(', ') || 'no days';
 }
 
-function TriggerForm({ initial, searches, onDone, onCancel }) {
+function scheduleSummary(trigger) {
+  const t = trigger.time;
+  if (trigger.frequency === 'hourly') return `Every hour at :${t.split(':')[1]}`;
+  if (trigger.frequency === 'daily') return `Every day at ${t}`;
+  return `${formatDays(trigger.days_of_week)} at ${t}`;
+}
+
+function TriggerForm({ mode = 'create', initial, searches, onDone, onCancel }) {
   const [label, setLabel] = useState(initial?.label ?? '');
   const [module, setModule] = useState(initial?.module ?? 'linkedin');
   const [searchId, setSearchId] = useState(initial?.linked_search_id ?? '');
@@ -82,9 +84,11 @@ function TriggerForm({ initial, searches, onDone, onCancel }) {
         days_of_week: days,
         module_inputs: moduleInputs,
       };
-      if (initial) await api.triggers.update(initial.id, body);
+      if (mode === 'edit') await api.triggers.update(initial.id, body);
       else await api.triggers.create(body);
-      toast.success(initial ? 'Trigger updated' : 'Trigger scheduled');
+      toast.success(
+        mode === 'edit' ? 'Trigger updated' : mode === 'duplicate' ? 'Trigger duplicated' : 'Trigger scheduled'
+      );
       onDone();
     } catch (err) {
       toast.error(err.message);
@@ -148,7 +152,7 @@ function TriggerForm({ initial, searches, onDone, onCancel }) {
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.22, ease: EASE }}
+            transition={{ duration: 0.2, ease: EASE }}
             style={{ overflow: 'hidden' }}
           >
             <div className="module-inputs">
@@ -313,7 +317,8 @@ function TriggerForm({ initial, searches, onDone, onCancel }) {
 
       <div className="form-actions">
         <button type="submit" className="btn btn-primary" disabled={saving}>
-          {saving ? 'Saving…' : initial ? 'Save changes' : 'Save trigger'}
+          {saving && <Spinner />}
+          {saving ? 'Saving…' : mode === 'edit' ? 'Save changes' : mode === 'duplicate' ? 'Save copy' : 'Save trigger'}
         </button>
         {onCancel && (
           <button type="button" className="btn btn-ghost" onClick={onCancel}>
@@ -325,36 +330,16 @@ function TriggerForm({ initial, searches, onDone, onCancel }) {
   );
 }
 
-function TriggerCard({ trigger, searches, expanded, onToggle, onChanged }) {
-  const open = expanded;
-  const setOpen = (v) => {
-    if (v !== open) onToggle();
-  };
-  const [running, setRunning] = useState(false);
+function TriggerCard({ trigger, onRunStarted, onEdit, onDuplicate, onChanged }) {
   const [confirming, setConfirming] = useState(false);
 
   const runNow = async () => {
-    setRunning(true);
     try {
       const { runId } = await api.triggers.runNow(trigger.id);
-      const deadline = Date.now() + 10 * 60 * 1000;
-      while (Date.now() < deadline) {
-        await new Promise((r) => setTimeout(r, 1500));
-        const run = await api.runs.get(runId);
-        if (run.finished_at) {
-          if (run.status === 'error') toast.error(`${trigger.label}: ${run.error}`);
-          else
-            toast.success(
-              `${trigger.label}: ${run.new_jobs_count} new job${run.new_jobs_count === 1 ? '' : 's'}`
-            );
-          onChanged();
-          break;
-        }
-      }
+      toast.success(`Run started for “${trigger.label}” — opening Run history`);
+      onRunStarted(runId);
     } catch (err) {
       toast.error(err.message);
-    } finally {
-      setRunning(false);
     }
   };
 
@@ -373,44 +358,45 @@ function TriggerCard({ trigger, searches, expanded, onToggle, onChanged }) {
     }
   };
 
-  const summary =
-    trigger.frequency === 'weekly'
-      ? FREQ_SUMMARY.weekly(trigger.time, trigger.days_of_week)
-      : FREQ_SUMMARY[trigger.frequency](trigger.time);
+  const summary = scheduleSummary(trigger);
 
   return (
     <motion.div layout className="card">
       <div className="card-head">
-        <div className="card-title">
-          <StatusDot status={running ? 'running' : 'idle'} />
+        <button type="button" className="card-title card-title-btn" onClick={onEdit}>
+          <StatusDot status="idle" />
           <span>{trigger.label}</span>
           <span className={`badge badge-${trigger.module}`}>
             {trigger.module === 'linkedin' ? 'LinkedIn' : 'Upwork'}
           </span>
-        </div>
+        </button>
         <div className="card-actions">
           <button
             type="button"
             className="btn btn-ghost btn-icon"
             onClick={runNow}
-            disabled={running}
             title="Run now"
             aria-label="Run now"
           >
-            <motion.span animate={running ? { rotate: 360 } : {}} transition={running ? { repeat: Infinity, duration: 1, ease: 'linear' } : {}}>
-              <Icon name="play" />
-            </motion.span>
+            <Icon name="play" />
           </button>
           <button
             type="button"
-            className={`btn btn-ghost btn-icon${open ? ' active' : ''}`}
-            onClick={() => setOpen(!open)}
+            className="btn btn-ghost btn-icon"
+            onClick={onEdit}
             title="Edit trigger"
             aria-label="Edit trigger"
           >
-            <motion.span animate={{ rotate: open ? 90 : 0 }}>
-              <Icon name="chevron" />
-            </motion.span>
+            <Icon name="edit" />
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost btn-icon"
+            onClick={onDuplicate}
+            title="Duplicate trigger"
+            aria-label="Duplicate trigger"
+          >
+            <Icon name="copy" />
           </button>
           <button
             type="button"
@@ -436,30 +422,12 @@ function TriggerCard({ trigger, searches, expanded, onToggle, onChanged }) {
         <span className="muted">Next:</span> {new Date(trigger.next_run_at).toLocaleString()}{' '}
         <Countdown iso={trigger.next_run_at} />
       </div>
-      <Collapsible open={open}>
-        <div className="card-body">
-          {searches.length === 0 ? (
-            <span className="muted">Create a saved search first.</span>
-          ) : (
-            <TriggerForm
-              initial={trigger}
-              searches={searches}
-              onDone={() => {
-                setOpen(false);
-                onChanged();
-              }}
-              onCancel={() => setOpen(false)}
-            />
-          )}
-        </div>
-      </Collapsible>
     </motion.div>
   );
 }
 
-export default function Triggers({ searches, triggers, loading, reload, goToListSearches }) {
-  const [creating, setCreating] = useState(false);
-  const [expandedId, setExpandedId] = useState(null);
+export default function Triggers({ searches, triggers, loading, reload, goToListSearches, onRunStarted }) {
+  const [modal, setModal] = useState(null);
   const [moduleFilter, setModuleFilter] = useState('all');
   const hasSearches = searches.length > 0;
 
@@ -467,13 +435,24 @@ export default function Triggers({ searches, triggers, loading, reload, goToList
     .filter((t) => moduleFilter === 'all' || t.module === moduleFilter)
     .sort((a, b) => (a.next_run_at ?? '').localeCompare(b.next_run_at ?? ''));
 
-  const toggleCreate = () => {
+  const openCreate = () => {
     if (!hasSearches) {
       goToListSearches();
       return;
     }
-    setCreating(!creating);
+    setModal({ mode: 'create' });
   };
+
+  const closeModal = () => setModal(null);
+  const modalTitle =
+    modal?.mode === 'create' ? 'New trigger' : modal?.mode === 'duplicate' ? 'Duplicate trigger' : 'Edit trigger';
+  const modalTrigger = modal?.trigger;
+  const modalSubtitle = modalTrigger ? modalTrigger.label : 'Runs a module against a saved search on a schedule';
+
+  const duplicateValues = (t) => ({
+    ...t,
+    label: `${t.label} (copy)`,
+  });
 
   return (
     <div>
@@ -487,31 +466,13 @@ export default function Triggers({ searches, triggers, loading, reload, goToList
                 : `${triggers.length} trigger(s)`
               : ''}
           </span>
-          <button
-            type="button"
-            className={`btn ${creating ? 'btn-ghost' : 'btn-primary'}`}
-            onClick={toggleCreate}
-            disabled={loading}
-            title={hasSearches ? 'Create a scheduled trigger' : 'Create a saved search first'}
-          >
-            <Icon name={creating ? 'x' : 'plus'} size={14} />
-            {creating ? 'Close' : 'New trigger'}
+          <button type="button" className="btn btn-primary" onClick={openCreate} disabled={loading}
+            title={hasSearches ? 'Create a scheduled trigger' : 'Create a saved search first'}>
+            <Icon name="plus" size={14} />
+            New trigger
           </button>
         </div>
       </div>
-
-      <Collapsible open={creating}>
-        <div className="card card-body form-card">
-          <TriggerForm
-            searches={searches}
-            onDone={() => {
-              setCreating(false);
-              reload();
-            }}
-            onCancel={() => setCreating(false)}
-          />
-        </div>
-      </Collapsible>
 
       {loading ? (
         <SkeletonList rows={2} />
@@ -532,7 +493,7 @@ export default function Triggers({ searches, triggers, loading, reload, goToList
           title="No triggers yet"
           hint="Add a trigger so your searches run on a schedule and deliver CSVs to Telegram."
           action={
-            <button type="button" className="btn btn-primary" onClick={() => setCreating(true)}>
+            <button type="button" className="btn btn-primary" onClick={() => setModal({ mode: 'create' })}>
               New trigger
             </button>
           }
@@ -566,9 +527,9 @@ export default function Triggers({ searches, triggers, loading, reload, goToList
                   >
                     <TriggerCard
                       trigger={t}
-                      searches={searches}
-                      expanded={expandedId === t.id}
-                      onToggle={() => setExpandedId(expandedId === t.id ? null : t.id)}
+                      onRunStarted={onRunStarted}
+                      onEdit={() => setModal({ mode: 'edit', trigger: t })}
+                      onDuplicate={() => setModal({ mode: 'duplicate', trigger: t })}
                       onChanged={reload}
                     />
                   </motion.div>
@@ -578,6 +539,34 @@ export default function Triggers({ searches, triggers, loading, reload, goToList
           )}
         </>
       )}
+
+      <Modal
+        open={Boolean(modal)}
+        title={modalTitle}
+        subtitle={modalSubtitle}
+        onClose={closeModal}
+        wide
+      >
+        {modal && (
+          <TriggerForm
+            key={`${modal.mode}_${modal.trigger?.id ?? 'new'}`}
+            mode={modal.mode}
+            initial={
+              modal.mode === 'create'
+                ? undefined
+                : modal.mode === 'duplicate'
+                  ? duplicateValues(modal.trigger)
+                  : modal.trigger
+            }
+            searches={searches}
+            onDone={() => {
+              closeModal();
+              reload();
+            }}
+            onCancel={closeModal}
+          />
+        )}
+      </Modal>
     </div>
   );
 }

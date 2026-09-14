@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 
 export const EASE = [0.4, 0, 0.2, 1];
@@ -201,6 +202,7 @@ const ICONS = {
   plus: <path d="M12 5v14M5 12h14" />,
   trash: <path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />,
   edit: <path d="M4 20h4l11-11-4-4L4 16v4zM13 6l4 4" />,
+  copy: <path d="M9 9h10v10H9zM5 15H4V4h10" />,
   play: <path d="M7 5l12 7-12 7V5z" />,
   search: <path d="M11 4a7 7 0 105.2 11.9L21 21M11 4a7 7 0 015.2 11.9" />,
   clock: <path d="M12 3a9 9 0 100 18 9 9 0 000-18zm0 4v5l3.5 2" />,
@@ -267,4 +269,68 @@ export function useShake(timeout = 450) {
     return () => clearTimeout(t);
   }, [shake, timeout]);
   return [shake, () => setShake(true)];
+}
+
+export function Modal({ open, title, subtitle, onClose, children, wide = false }) {
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    const prevOverflow = document.body.style.overflow;
+    const prevPaddingRight = document.body.style.paddingRight;
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight = `${scrollbarWidth}px`;
+    }
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prevOverflow;
+      document.body.style.paddingRight = prevPaddingRight;
+    };
+  }, [open, onClose]);
+
+  return createPortal(
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          className="modal-backdrop"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
+          onMouseDown={onClose}
+        >
+          <motion.div
+            className={`modal-panel${wide ? ' wide' : ''}`}
+            role="dialog"
+            aria-modal="true"
+            initial={{ opacity: 0, y: 18, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 18, scale: 0.98 }}
+            transition={{ duration: 0.18, ease: EASE }}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="modal-head">
+              <div>
+                <div className="modal-title">{title}</div>
+                {subtitle && <div className="modal-subtitle">{subtitle}</div>}
+              </div>
+              <button type="button" className="btn btn-ghost btn-icon" onClick={onClose} aria-label="Close">
+                <Icon name="x" />
+              </button>
+            </div>
+            <div className="modal-scroll">{children}</div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>,
+    document.body
+  );
+}
+
+export function Spinner() {
+  return <span className="spinner" aria-hidden="true" />;
 }

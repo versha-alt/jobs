@@ -13,7 +13,13 @@ export function classifyError(message = '') {
       hint: 'The bot cannot see your chat. Send any message to your bot in Telegram, then copy the numeric chat id (via the bot token getUpdates URL) into TELEGRAM_CHAT_ID in .env and restart the server.',
     };
   }
-  if (m.includes('must be object') || m.includes('must be array') || m.includes('input json') || m.includes('input is not valid')) {
+  if (m.includes('cookies is required')) {
+    return {
+      title: 'Actor requires LinkedIn login cookies',
+      hint: 'The LinkedIn actor now refuses to run without your LinkedIn session cookies. Log into LinkedIn, copy the session cookie (li_at) from browser DevTools, and set LINKEDIN_COOKIES in .env as JSON: [{"name":"li_at","value":"…"}] — then restart the server. Or switch to a different LinkedIn actor.',
+    };
+  }
+  if (m.includes('input is not valid') || m.includes('must be object') || m.includes('must be array') || m.includes('input json')) {
     return {
       title: 'Actor input mismatch',
       hint: 'The data sent to the actor does not match its input schema. Compare the mapping in server/modules/<module>.js with the input table on the actor page at apify.com.',
@@ -23,6 +29,18 @@ export function classifyError(message = '') {
     return {
       title: 'Actor not configured',
       hint: 'The module has no actor id set. Copy the exact actor id from apify.com into APIFY_LINKEDIN_ACTOR_ID or APIFY_UPWORK_ACTOR_ID in .env and restart the server.',
+    };
+  }
+  if (m.includes('must rent a paid actor') || m.includes('free trial has expired') || m.includes('free trial')) {
+    return {
+      title: 'Actor trial expired — payment required',
+      hint: 'This actor now requires a paid rental or pay-per-event plan on Apify. Open the actor page on apify.com and add it to your subscription (Billing → your plan covers the rest).',
+    };
+  }
+  if (m.includes('actor run timed out')) {
+    return {
+      title: 'Actor run timed out',
+      hint: 'The actor did not finish in time. This is usually temporary — try Run now again. If it repeats, lower the rows limit in the trigger settings.',
     };
   }
   if (m.includes('actor') && (m.includes('not found') || m.includes('does not exist'))) {
