@@ -11,13 +11,45 @@ if (!fs.existsSync(path.join(root, 'dist'))) {
   fs.mkdirSync(path.join(root, 'data'), { recursive: true });
 }
 
+/* runtime overrides (admin Settings screen) take precedence over .env values */
+const overrides = new Map();
+export function setOverride(key, value) {
+  overrides.set(key, value);
+}
+export function clearOverride(key) {
+  overrides.delete(key);
+}
+
 export const config = {
   port: Number(process.env.PORT || 8787),
-  apifyToken: process.env.APIFY_TOKEN || '',
-  linkedinActorId: process.env.APIFY_LINKEDIN_ACTOR_ID || '',
-  upworkActorId: process.env.APIFY_UPWORK_ACTOR_ID || '',
-  telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '',
-  telegramChatId: process.env.TELEGRAM_CHAT_ID || '',
+  get apifyToken() {
+    return overrides.get('apify_token') ?? (process.env.APIFY_TOKEN || '');
+  },
+  get linkedinActorId() {
+    return overrides.get('linkedin_actor_id') ?? (process.env.APIFY_LINKEDIN_ACTOR_ID || '');
+  },
+  get upworkActorId() {
+    return overrides.get('upwork_actor_id') ?? (process.env.APIFY_UPWORK_ACTOR_ID || '');
+  },
+  get apifySources() {
+    return {
+      token: overrides.has('apify_token') ? 'database' : 'environment',
+      linkedinActorId: overrides.has('linkedin_actor_id') ? 'database' : 'environment',
+      upworkActorId: overrides.has('upwork_actor_id') ? 'database' : 'environment',
+    };
+  },
+  get telegramBotToken() {
+    return overrides.get('telegram_bot_token') ?? (process.env.TELEGRAM_BOT_TOKEN || '');
+  },
+  get telegramChatId() {
+    return overrides.get('telegram_chat_id') ?? (process.env.TELEGRAM_CHAT_ID || '');
+  },
+  get telegramSources() {
+    return {
+      telegramBotToken: overrides.has('telegram_bot_token') ? 'database' : 'environment',
+      telegramChatId: overrides.has('telegram_chat_id') ? 'database' : 'environment',
+    };
+  },
   linkedinCookies: parseCookies(process.env.LINKEDIN_COOKIES || ''),
   mysql: {
     host: process.env.MYSQL_HOST || 'localhost',

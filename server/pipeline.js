@@ -34,8 +34,13 @@ export function applyTimeFilter(jobs, timeFilter) {
   });
 }
 
-export async function dedupe(jobs) {
-  if (jobs.length === 0) return [];
+/**
+ * Split fetched jobs against seen_jobs (per user, per source).
+ * Nothing is discarded or marked here — the caller decides what to persist.
+ * Returns the unseen jobs plus a duplicate tally for visibility.
+ */
+export async function partitionSeen(jobs, userId) {
+  if (jobs.length === 0) return { newJobs: [], duplicateCount: 0 };
   const bySource = new Map();
   for (const j of jobs) {
     const list = bySource.get(j.source) ?? [];
@@ -46,19 +51,25 @@ export async function dedupe(jobs) {
   for (const [source, ids] of bySource) {
     const placeholders = ids.map(() => '?').join(',');
     const rows = await all(
-      `SELECT job_id FROM seen_jobs WHERE source = ? AND job_id IN (${placeholders})`,
-      [source, ...ids]
+      `SELECT job_id FROM seen_jobs WHERE user_id = ? AND source = ? AND job_id IN (${placeholders})`,
+      [userId ?? '', source, ...ids]
     );
     for (const row of rows) seen.add(row.job_id);
   }
-  return jobs.filter((j) => !seen.has(j.job_id));
+  const newJobs = [];
+  let duplicateCount = 0;
+  for (const j of jobs) {
+    if (seen.has(j.job_id)) duplicateCount += 1;
+    else newJobs.push(j);
+  }
+  return { newJobs, duplicateCount };
 }
 
-export async function markSent(jobs) {
+export async function markSent(jobs, userId) {
   for (const j of jobs) {
     await run(
-      'INSERT IGNORE INTO seen_jobs (job_id, source, sent_at) VALUES (?, ?, ?)',
-      [j.job_id, j.source, nowIso()]
+      'INSERT IGNORE INTO seen_jobs (job_id, source, user_id, sent_at) VALUES (?, ?, ?, ?)',
+      [j.job_id, j.source, userId ?? '', nowIso()]
     );
   }
 }

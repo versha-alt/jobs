@@ -213,6 +213,25 @@ const ICONS = {
   alert: <path d="M12 3l10 17H2L12 3zm0 7v5m0 3h.01" />,
   list: <path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01" />,
   back: <path d="M19 12H5m0 0l6-6m-6 6l6 6" />,
+  sort: <path d="M8 5v14M8 19l-3.2-3.2M8 19l3.2-3.2M16 19V5m0 0l-3.2 3.2M16 5l3.2 3.2" />,
+  rowsCozy: <path d="M4 6.5h16M4 12h16M4 17.5h16" />,
+  rowsCompact: <path d="M4 5h16M4 9.7h16M4 14.3h16M4 19h16" />,
+  eye: (
+    <>
+      <path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12z" />
+      <circle cx="12" cy="12" r="2.8" />
+    </>
+  ),
+  eyeOff: (
+    <>
+      <path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12z" />
+      <path d="M4 4l16 16" />
+    </>
+  ),
+  grid: <path d="M4 4h6.5v6.5H4zM13.5 4H20v6.5h-6.5zM4 13.5h6.5V20H4zM13.5 13.5H20V20h-6.5z" />,
+  star: <path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9L12 3z" />,
+  xCircle: <path d="M12 3a9 9 0 100 18 9 9 0 000-18zm-3 6l6 6m0-6l-6 6" />,
+  logout: <path d="M15 4h4v16h-4M10 17l-5-5 5-5M5 12h11" />,
 };
 
 export function Icon({ name, size = 16 }) {
@@ -335,4 +354,248 @@ export function Modal({ open, title, subtitle, onClose, children, wide = false }
 
 export function Spinner() {
   return <span className="spinner" aria-hidden="true" />;
+}
+
+/* ---------- Data list system (Searches & Scheduling) ---------- */
+
+export function usePagedList(items, pageSize = 12) {
+  const [page, setPage] = useState(1);
+  const pageCount = Math.max(1, Math.ceil(items.length / pageSize));
+  const safe = Math.min(page, pageCount);
+  useEffect(() => {
+    if (page !== safe) setPage(safe);
+  }, [page, safe]);
+  const start = (safe - 1) * pageSize;
+  return {
+    page: safe,
+    pageCount,
+    setPage,
+    total: items.length,
+    start,
+    from: items.length === 0 ? 0 : start + 1,
+    to: Math.min(start + pageSize, items.length),
+    slice: items.slice(start, start + pageSize),
+  };
+}
+
+export function ListToolbar({
+  query,
+  onQuery,
+  placeholder,
+  sort,
+  sortOptions,
+  onSort,
+  density,
+  onDensity,
+  children,
+}) {
+  return (
+    <div className="list-toolbar">
+      <div className="lt-search">
+        <Icon name="search" size={15} />
+        <input
+          value={query}
+          onChange={(e) => onQuery(e.target.value)}
+          placeholder={placeholder}
+          aria-label="Search"
+        />
+        {query ? (
+          <button
+            type="button"
+            className="lt-clear"
+            onClick={() => onQuery('')}
+            aria-label="Clear search"
+          >
+            <Icon name="x" size={12} />
+          </button>
+        ) : null}
+      </div>
+      <div className="lt-side">
+        {children}
+        <label className="lt-sort" title="Sort">
+          <Icon name="sort" size={14} />
+          <select value={sort} onChange={(e) => onSort(e.target.value)} aria-label="Sort by">
+            {sortOptions.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          <Icon name="chevron" size={12} />
+        </label>
+        {onDensity && (
+          <div className="lt-density" role="group" aria-label="Row density">
+            <button
+              type="button"
+              className={density === 'cozy' ? 'on' : ''}
+              onClick={() => onDensity('cozy')}
+              title="Comfortable rows"
+              aria-label="Comfortable density"
+            >
+              <Icon name="rowsCozy" size={14} />
+            </button>
+            <button
+              type="button"
+              className={density === 'compact' ? 'on' : ''}
+              onClick={() => onDensity('compact')}
+              title="Compact rows"
+              aria-label="Compact density"
+            >
+              <Icon name="rowsCompact" size={14} />
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function pageList(page, count) {
+  if (count <= 7) return Array.from({ length: count }, (_, i) => i + 1);
+  const set = new Set([1, 2, count - 1, count, page - 1, page, page + 1]);
+  const arr = [...set].filter((p) => p >= 1 && p <= count).sort((a, b) => a - b);
+  const out = [];
+  let prev = 0;
+  for (const p of arr) {
+    if (p - prev > 1) out.push('…');
+    out.push(p);
+    prev = p;
+  }
+  return out;
+}
+
+export function Pagination({ page, pageCount, setPage, from, to, total, unit = 'items' }) {
+  const label =
+    pageCount <= 1 ? `${total} ${unit}` : `Showing ${from}–${to} of ${total} ${unit}`;
+  return (
+    <div className="dl-footer">
+      <span className="dl-range">{label}</span>
+      {pageCount > 1 && (
+        <div className="dl-pager">
+          <button
+            type="button"
+            className="dl-page-btn"
+            disabled={page === 1}
+            onClick={() => setPage(page - 1)}
+            aria-label="Previous page"
+          >
+            <span style={{ display: 'inline-flex', transform: 'rotate(180deg)' }}>
+              <Icon name="chevron" size={13} />
+            </span>
+          </button>
+          {pageList(page, pageCount).map((p, i) =>
+            p === '…' ? (
+              <span key={`gap${i}`} className="dl-page-gap">
+                …
+              </span>
+            ) : (
+              <button
+                key={p}
+                type="button"
+                className={`dl-page-btn${p === page ? ' on' : ''}`}
+                onClick={() => setPage(p)}
+                aria-label={`Page ${p}`}
+                aria-current={p === page ? 'page' : undefined}
+              >
+                {p}
+              </button>
+            )
+          )}
+          <button
+            type="button"
+            className="dl-page-btn"
+            disabled={page === pageCount}
+            onClick={() => setPage(page + 1)}
+            aria-label="Next page"
+          >
+            <Icon name="chevron" size={13} />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function SkeletonRows({ rows = 8 }) {
+  return (
+    <div className="datalist skel-rows" aria-hidden="true">
+      {Array.from({ length: rows }).map((_, i) => (
+        <div key={i} className="dl-row">
+          <span className="skel" style={{ width: 36, height: 36, borderRadius: 10 }} />
+          <span className="skel" style={{ width: `${34 + ((i * 9) % 22)}%`, height: 14 }} />
+          <span className="skel" style={{ width: '16%', height: 12 }} />
+          <span className="skel" style={{ width: 70, height: 20, borderRadius: 999 }} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function EmptyFilter({ message, onClear }) {
+  return (
+    <div className="datalist empty-filter-card">
+      <p className="empty-filter-title">{message}</p>
+      <p className="empty-filter-hint">Try a different search term or clear the active filters.</p>
+      {onClear && (
+        <button type="button" className="btn btn-ghost" onClick={onClear}>
+          Clear filters
+        </button>
+      )}
+    </div>
+  );
+}
+
+export function humanizeKey(key) {
+  return key
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/^./, (c) => c.toUpperCase())
+    .trim();
+}
+
+function classifyValue(v) {
+  if (v === null || v === undefined || v === '') return { empty: true };
+  if (typeof v === 'boolean') return { text: v ? 'Yes' : 'No' };
+  if (Array.isArray(v) || typeof v === 'object') {
+    const json = JSON.stringify(v, null, 1);
+    return json.replace(/\s/g, '').length <= 4 ? { empty: true } : { text: json, long: true };
+  }
+  const text = String(v);
+  return { text, long: text.length > 240 };
+}
+
+// every field the API stored for this job, unfiltered
+export function RawRecord({ raw }) {
+  const [open, setOpen] = useState(false);
+  if (!raw || Object.keys(raw).length === 0) return null;
+  const entries = Object.entries(raw);
+  const filled = entries.filter(([, v]) => !classifyValue(v).empty).length;
+
+  return (
+    <div className="card raw-card">
+      <button type="button" className="raw-toggle" onClick={() => setOpen(!open)}>
+        <motion.span animate={{ rotate: open ? 90 : 0 }} style={{ display: 'inline-flex' }}>
+          <Icon name="chevron" size={14} />
+        </motion.span>
+        All fields returned for this job
+        <span className="raw-count">{filled} of {entries.length} recorded</span>
+      </button>
+      <Collapsible open={open}>
+        <div className="raw-grid">
+          {entries.map(([key, value]) => {
+            const info = classifyValue(value);
+            return (
+              <div key={key} className={`raw-row${info.empty ? ' raw-empty' : ''}`}>
+                <span className="raw-key">{humanizeKey(key)}</span>
+                {info.empty ? (
+                  <span className="raw-val">—</span>
+                ) : (
+                  <span className={`raw-val${info.long ? ' raw-long' : ''}`}>{info.text}</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </Collapsible>
+    </div>
+  );
 }

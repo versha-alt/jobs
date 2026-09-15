@@ -1,8 +1,8 @@
-# Job Alert Bot — Where Things Stand & What's Next
+# Job Portal — Where Things Stand & What's Next
 
 _Last updated: 2026-09-14_
 
-What this tool does: it watches LinkedIn and Upwork for jobs matching your saved searches (e.g. "PHP Developer" in Canada, last 24 hours), shows every run and its results in the web dashboard, and sends you a short Telegram summary whenever a run finds new jobs.
+What this tool does (Job Portal): it watches LinkedIn and Upwork for jobs matching your saved searches (e.g. "PHP Developer" in Canada, last 24 hours), shows every run and its results in the web dashboard, and sends you a short Telegram summary whenever a run finds new jobs.
 
 ---
 

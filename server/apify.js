@@ -11,6 +11,10 @@ export function apifyClient() {
   return client;
 }
 
+export function resetApifyClient() {
+  client = null;
+}
+
 export async function runActor(actorId, input, timeoutMs = 10 * 60 * 1000) {
   const c = apifyClient();
   let timer;

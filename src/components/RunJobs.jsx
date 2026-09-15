@@ -88,6 +88,22 @@ export default function RunJobs({ runId, onBack, searchLabel, onOpenJob }) {
         <span className={`pill ${run.status === 'success' ? 'pill-ok' : run.status === 'error' ? 'pill-err' : 'pill-warn'}`}>
           {run.status}
         </span>
+        {run.trigger_label && (
+          <span className="pill pill-muted" title={run.manual ? 'Started manually via Run now' : 'Started by its schedule'}>
+            {run.trigger_label} · {run.manual ? 'manual' : 'scheduled'}
+          </span>
+        )}
+        {run.started_at && run.finished_at && (
+          <span className="pill pill-muted">
+            {(() => {
+              const ms = new Date(run.finished_at) - new Date(run.started_at);
+              if (Number.isNaN(ms) || ms < 0) return null;
+              if (ms < 1000) return '<1s';
+              if (ms < 60000) return `${Math.round(ms / 1000)}s`;
+              return `${Math.floor(ms / 60000)}m ${Math.round((ms % 60000) / 1000)}s`;
+            })()}
+          </span>
+        )}
         {run.status === 'running' && <span className="spinner" aria-hidden="true" />}
         {jobs.length > 0 && onOpenJob && <span className="muted jobs-hint">click a job for details</span>}
       </div>

@@ -10,6 +10,12 @@ async function req(method, url, body) {
 }
 
 export const api = {
+  auth: {
+    me: () => req('GET', '/api/auth/me'),
+    signup: (body) => req('POST', '/api/auth/signup', body),
+    login: (body) => req('POST', '/api/auth/login', body),
+    logout: () => req('POST', '/api/auth/logout'),
+  },
   health: () => req('GET', '/api/health'),
   modules: {
     list: () => req('GET', '/api/modules'),
@@ -31,6 +37,20 @@ export const api = {
     update: (id, body) => req('PUT', `/api/triggers/${id}`, body),
     remove: (id) => req('DELETE', `/api/triggers/${id}`),
     runNow: (id) => req('POST', `/api/triggers/${id}/run`),
+    runs: (id, params) => req('GET', `/api/triggers/${id}/runs?${new URLSearchParams(params)}`),
+  },
+  settings: {
+    getApify: () => req('GET', '/api/settings/apify'),
+    saveApify: (body) => req('PUT', '/api/settings/apify', body),
+    getTelegram: () => req('GET', '/api/settings/telegram'),
+    saveTelegram: (body) => req('PUT', '/api/settings/telegram', body),
+    testTelegram: (body) => req('POST', '/api/settings/telegram/test', body),
+  },
+  jobs: {
+    list: (params) => req('GET', `/api/jobs?${new URLSearchParams(params)}`),
+    get: (id) => req('GET', `/api/jobs/${id}`),
+    bookmark: (id) => req('POST', `/api/jobs/${id}/bookmark`),
+    dismiss: (id) => req('POST', `/api/jobs/${id}/dismiss`),
   },
   runs: {
     list: (limit = 50) => req('GET', `/api/runs?limit=${limit}`),

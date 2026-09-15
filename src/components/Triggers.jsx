@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { api } from '../api.js';
 import { toast } from '../toast.js';
@@ -6,13 +7,17 @@ import {
   ChipInput,
   Countdown,
   EASE,
+  EmptyFilter,
   EmptyState,
   Icon,
+  ListToolbar,
   Modal,
+  Pagination,
   Segmented,
-  SkeletonList,
+  SkeletonRows,
   Spinner,
   StatusDot,
+  usePagedList,
   useShake,
 } from './ui.jsx';
 
@@ -29,7 +34,7 @@ function scheduleSummary(trigger) {
   return `${formatDays(trigger.days_of_week)} at ${t}`;
 }
 
-function TriggerForm({ mode = 'create', initial, searches, onDone, onCancel }) {
+export function TriggerForm({ mode = 'create', initial, searches, onDone, onCancel }) {
   const [label, setLabel] = useState(initial?.label ?? '');
   const [module, setModule] = useState(initial?.module ?? 'linkedin');
   const [searchId, setSearchId] = useState(initial?.linked_search_id ?? '');
@@ -330,13 +335,13 @@ function TriggerForm({ mode = 'create', initial, searches, onDone, onCancel }) {
   );
 }
 
-function TriggerCard({ trigger, onRunStarted, onEdit, onDuplicate, onChanged }) {
+function TriggerRow({ trigger, onRunStarted, onEdit, onDuplicate, onChanged }) {
   const [confirming, setConfirming] = useState(false);
 
   const runNow = async () => {
     try {
       const { runId } = await api.triggers.runNow(trigger.id);
-      toast.success(`Run started for “${trigger.label}” — opening Run history`);
+      toast.success(`Run started for "${trigger.label}" - opening Run history`);
       onRunStarted(runId);
     } catch (err) {
       toast.error(err.message);
@@ -361,79 +366,121 @@ function TriggerCard({ trigger, onRunStarted, onEdit, onDuplicate, onChanged }) 
   const summary = scheduleSummary(trigger);
 
   return (
-    <motion.div layout className="card">
-      <div className="card-head">
-        <button type="button" className="card-title card-title-btn" onClick={onEdit}>
-          <StatusDot status="idle" />
-          <span>{trigger.label}</span>
-          <span className={`badge badge-${trigger.module}`}>
-            {trigger.module === 'linkedin' ? 'LinkedIn' : 'Upwork'}
-          </span>
+    <div className="dl-row dl-row-trigger">
+      <StatusDot status="idle" />
+      <div className="dl-main">
+        <button
+          type="button"
+          className="dl-title"
+          onClick={() => navigate(`/schedule/${trigger.id}`)}
+          title="Open schedule details"
+        >
+          {trigger.label}
         </button>
-        <div className="card-actions">
-          <button
-            type="button"
-            className="btn btn-ghost btn-icon"
-            onClick={runNow}
-            title="Run now"
-            aria-label="Run now"
-          >
-            <Icon name="play" />
-          </button>
-          <button
-            type="button"
-            className="btn btn-ghost btn-icon"
-            onClick={onEdit}
-            title="Edit trigger"
-            aria-label="Edit trigger"
-          >
-            <Icon name="edit" />
-          </button>
-          <button
-            type="button"
-            className="btn btn-ghost btn-icon"
-            onClick={onDuplicate}
-            title="Duplicate trigger"
-            aria-label="Duplicate trigger"
-          >
-            <Icon name="copy" />
-          </button>
-          <button
-            type="button"
-            className={`btn btn-icon ${confirming ? 'btn-danger' : 'btn-ghost'}`}
-            onClick={remove}
-            aria-label="Delete trigger"
-          >
-            {confirming ? 'Sure?' : <Icon name="trash" />}
-          </button>
-        </div>
-      </div>
-      <div className="meta-row">
-        <span className="meta">
-          <Icon name="clock" size={12} /> {summary}
+        <span className={`badge badge-${trigger.module}`}>
+          {trigger.module === 'linkedin' ? 'LinkedIn' : 'Upwork'}
         </span>
+      </div>
+      <span className="dl-meta dl-cadence" title={summary}>
+        <Icon name="clock" size={13} />
+        {summary}
+      </span>
+      <span
+        className="dl-meta dl-searchcell dl-trunc"
+        title={trigger.search ? trigger.search.keywords.join(', ') : undefined}
+      >
         {trigger.search ? (
-          <span className="meta">{trigger.search.keywords.join(', ')}</span>
+          trigger.search.keywords.join(', ')
         ) : (
-          <span className="meta err-text">linked search missing</span>
+          <span className="err-text">linked search missing</span>
         )}
+      </span>
+      <div className="dl-next">
+        <span className="dl-next-rel">
+          <Countdown iso={trigger.next_run_at} />
+        </span>
+        <span className="dl-next-abs">
+          {trigger.next_run_at ? new Date(trigger.next_run_at).toLocaleString() : '-'}
+        </span>
       </div>
-      <div className="next-run">
-        <span className="muted">Next:</span> {new Date(trigger.next_run_at).toLocaleString()}{' '}
-        <Countdown iso={trigger.next_run_at} />
+      <div className="dl-actions">
+        <button
+          type="button"
+          className="btn btn-ghost btn-icon"
+          onClick={runNow}
+          title="Run now"
+          aria-label="Run now"
+        >
+          <Icon name="play" />
+        </button>
+        <button
+          type="button"
+          className="btn btn-ghost btn-icon"
+          onClick={onEdit}
+          title="Edit trigger"
+          aria-label="Edit trigger"
+        >
+          <Icon name="edit" />
+        </button>
+        <button
+          type="button"
+          className="btn btn-ghost btn-icon"
+          onClick={onDuplicate}
+          title="Duplicate trigger"
+          aria-label="Duplicate trigger"
+        >
+          <Icon name="copy" />
+        </button>
+        <button
+          type="button"
+          className={`btn btn-icon ${confirming ? 'btn-danger' : 'btn-ghost'}`}
+          onClick={remove}
+          aria-label="Delete trigger"
+        >
+          {confirming ? 'Sure?' : <Icon name="trash" />}
+        </button>
       </div>
-    </motion.div>
+    </div>
   );
 }
 
 export default function Triggers({ searches, triggers, loading, reload, goToListSearches, onRunStarted }) {
+  const navigate = useNavigate();
   const [modal, setModal] = useState(null);
   const [moduleFilter, setModuleFilter] = useState('all');
-  const hasSearches = searches.length > 0;
+  const [query, setQuery] = useState('');
+  const [sort, setSort] = useState('next');
+  const [density, setDensityState] = useState(() => {
+    try { return localStorage.getItem('jp_density') || 'cozy'; } catch { return 'cozy'; }
+  });
+  const setDensity = (d) => {
+    setDensityState(d);
+    try { localStorage.setItem('jp_density', d); } catch { /* private mode */ }
+  };
 
-  const list = (triggers ?? [])
-    .filter((t) => moduleFilter === 'all' || t.module === moduleFilter)
-    .sort((a, b) => (a.next_run_at ?? '').localeCompare(b.next_run_at ?? ''));
+  const hasSearches = searches.length > 0;
+  const q = query.trim().toLowerCase();
+
+  const filtered = useMemo(() => {
+    let list = (triggers ?? []).filter((t) => {
+      if (moduleFilter !== 'all' && t.module !== moduleFilter) return false;
+      if (!q) return true;
+      return [t.label, t.search ? t.search.keywords.join(', ') : '', scheduleSummary(t)]
+        .join(' ')
+        .toLowerCase()
+        .includes(q);
+    });
+    const name = (t) => t.label.toLowerCase();
+    if (sort === 'next') {
+      list = [...list].sort((a, b) => (a.next_run_at ?? '9999').localeCompare(b.next_run_at ?? '9999'));
+    }
+    if (sort === 'updated') list = [...list].sort((a, b) => (b.updated_at ?? '').localeCompare(a.updated_at ?? ''));
+    if (sort === 'name') list = [...list].sort((a, b) => name(a).localeCompare(name(b)));
+    return list;
+  }, [triggers, moduleFilter, q, sort]);
+
+  const listview = usePagedList(filtered, 12);
+  const hasFilters = Boolean(q) || moduleFilter !== 'all';
 
   const openCreate = () => {
     if (!hasSearches) {
@@ -445,8 +492,8 @@ export default function Triggers({ searches, triggers, loading, reload, goToList
 
   const closeModal = () => setModal(null);
   const modalTitle =
-    modal?.mode === 'create' ? 'New trigger' : modal?.mode === 'duplicate' ? 'Duplicate trigger' : 'Edit trigger';
-  const modalTrigger = modal?.trigger;
+    modal && modal.mode === 'create' ? 'New trigger' : modal && modal.mode === 'duplicate' ? 'Duplicate trigger' : 'Edit trigger';
+  const modalTrigger = modal ? modal.trigger : undefined;
   const modalSubtitle = modalTrigger ? modalTrigger.label : 'Runs a module against a saved search on a schedule';
 
   const duplicateValues = (t) => ({
@@ -461,13 +508,18 @@ export default function Triggers({ searches, triggers, loading, reload, goToList
         <div className="section-actions">
           <span className="muted">
             {triggers
-              ? moduleFilter !== 'all'
-                ? `${list.length} of ${triggers.length}`
+              ? hasFilters
+                ? `${filtered.length} of ${triggers.length}`
                 : `${triggers.length} trigger(s)`
               : ''}
           </span>
-          <button type="button" className="btn btn-primary" onClick={openCreate} disabled={loading}
-            title={hasSearches ? 'Create a scheduled trigger' : 'Create a saved search first'}>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={openCreate}
+            disabled={loading}
+            title={hasSearches ? 'Create a scheduled trigger' : 'Create a saved search first'}
+          >
             <Icon name="plus" size={14} />
             New trigger
           </button>
@@ -475,7 +527,7 @@ export default function Triggers({ searches, triggers, loading, reload, goToList
       </div>
 
       {loading ? (
-        <SkeletonList rows={2} />
+        <SkeletonRows rows={9} />
       ) : searches.length === 0 ? (
         <EmptyState
           icon="zap"
@@ -491,7 +543,7 @@ export default function Triggers({ searches, triggers, loading, reload, goToList
         <EmptyState
           icon="clock"
           title="No triggers yet"
-          hint="Add a trigger so your searches run on a schedule and deliver CSVs to Telegram."
+          hint="Add a trigger so your searches run on a schedule and deliver fresh matches to Telegram."
           action={
             <button type="button" className="btn btn-primary" onClick={() => setModal({ mode: 'create' })}>
               New trigger
@@ -500,7 +552,20 @@ export default function Triggers({ searches, triggers, loading, reload, goToList
         />
       ) : (
         <>
-          <div className="toolbar">
+          <ListToolbar
+            query={query}
+            onQuery={setQuery}
+            placeholder="Search by trigger, search, schedule..."
+            sort={sort}
+            onSort={setSort}
+            sortOptions={[
+              { value: 'next', label: 'Next run time' },
+              { value: 'updated', label: 'Recently updated' },
+              { value: 'name', label: 'Name A-Z' },
+            ]}
+            density={density}
+            onDensity={setDensity}
+          >
             <Segmented
               value={moduleFilter}
               onChange={setModuleFilter}
@@ -510,32 +575,52 @@ export default function Triggers({ searches, triggers, loading, reload, goToList
                 { value: 'upwork', label: 'Upwork' },
               ]}
             />
-          </div>
-          {list.length === 0 ? (
-            <div className="empty-filter">No triggers for this module</div>
+          </ListToolbar>
+
+          {filtered.length === 0 ? (
+            <EmptyFilter
+              message={query ? `No triggers match "${query}"` : 'No triggers for this module'}
+              onClear={
+                hasFilters
+                  ? () => {
+                      setQuery('');
+                      setModuleFilter('all');
+                    }
+                  : undefined
+              }
+            />
           ) : (
-            <div className="stack">
-              <AnimatePresence initial={false}>
-                {list.map((t) => (
-                  <motion.div
-                    key={t.id}
-                    layout
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.97 }}
-                    transition={{ duration: 0.2, ease: EASE }}
-                  >
-                    <TriggerCard
-                      trigger={t}
-                      onRunStarted={onRunStarted}
-                      onEdit={() => setModal({ mode: 'edit', trigger: t })}
-                      onDuplicate={() => setModal({ mode: 'duplicate', trigger: t })}
-                      onChanged={reload}
-                    />
-                  </motion.div>
-                ))}
-              </AnimatePresence>
+            <div className={`datalist${density === 'compact' ? ' dl-compact' : ''}`}>
+              <div className="dl-head dl-head-trigger" aria-hidden="true">
+                <span />
+                <span className="dl-h-label">Trigger</span>
+                <span className="dl-h-label dl-cadence">Schedule</span>
+                <span className="dl-h-label dl-searchcell">Linked search</span>
+                <span className="dl-h-label dl-next dl-h-actions">Next run</span>
+                <span className="dl-h-label dl-h-actions">Actions</span>
+              </div>
+              {listview.slice.map((t) => (
+                <TriggerRow
+                  key={t.id}
+                  trigger={t}
+                  onRunStarted={onRunStarted}
+                  onEdit={() => setModal({ mode: 'edit', trigger: t })}
+                  onDuplicate={() => setModal({ mode: 'duplicate', trigger: t })}
+                  onChanged={reload}
+                />
+              ))}
             </div>
+          )}
+          {filtered.length > 0 && (
+            <Pagination
+              page={listview.page}
+              pageCount={listview.pageCount}
+              setPage={listview.setPage}
+              from={listview.from}
+              to={listview.to}
+              total={listview.total}
+              unit="triggers"
+            />
           )}
         </>
       )}

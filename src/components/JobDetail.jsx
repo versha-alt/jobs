@@ -1,17 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { api } from '../api.js';
-import { EASE, Icon, ModuleBadge, SkeletonList, timeAgo } from './ui.jsx';
-
-function Field({ label, value }) {
-  if (value === null || value === undefined || value === '' || value === false) return null;
-  return (
-    <div className="jd-field">
-      <span className="jd-field-label">{label}</span>
-      <span className="jd-field-value">{value === true ? 'yes' : value}</span>
-    </div>
-  );
-}
+import { EASE, Icon, ModuleBadge, RawRecord, SkeletonList, timeAgo } from './ui.jsx';
 
 function factsFor(source, job, raw) {
   const facts = [];
@@ -161,6 +151,8 @@ export default function JobDetail({ runId, jobRef, onBack }) {
           </span>
         )}
       </div>
+
+      <RawRecord raw={raw} />
     </motion.div>
   );
 }

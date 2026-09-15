@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Job Portal — Fresh job matches, delivered while you sleep</title>
+<meta name="description" content="Job Portal watches LinkedIn and Upwork for roles matching your saved searches and delivers fresh matches to Telegram. Set it up in minutes." />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23C2542B' d='M13 2 5 13h5l-1 9 8-11h-5l1-9z'/%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,420;0,9..144,560;0,9..144,680;1,9..144,480&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --paper: #F7F1E8;
+    --paper-deep: #F1E9DC;
+    --surface: #FFFDF8;
+    --ink: #221A10;
+    --ink-soft: #4A4237;
+    --muted: #7C7263;
+    --line: #E4D9C6;
+    --accent: #C2542B;
+    --accent-deep: #A0421E;
+    --accent-tint: #F6E3D7;
+    --forest: #2E4B3F;
+    --forest-deep: #243B32;
+    --forest-tint: #E4ECE6;
+    --gold: #D9A441;
+    --shadow-sm: 0 1px 2px rgba(34, 26, 16, 0.06), 0 2px 8px rgba(34, 26, 16, 0.05);
+    --shadow-md: 0 2px 6px rgba(34, 26, 16, 0.07), 0 14px 34px rgba(34, 26, 16, 0.10);
+    --shadow-lg: 0 6px 18px rgba(34, 26, 16, 0.10), 0 30px 60px rgba(34, 26, 16, 0.14);
+    --radius: 16px;
+    --font-display: "Fraunces", Georgia, serif;
+    --font-body: "Inter", -apple-system, sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: var(--font-body);
+    background: var(--paper);
+    color: var(--ink);
+    line-height: 1.6;
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  ::selection { background: var(--accent-tint); color: var(--accent-deep); }
+
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+
+  /* ---------- Header ---------- */
+  header {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 50;
+    transition: background 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+    border-bottom: 1px solid transparent;
+  }
+  header.scrolled {
+    background: rgba(247, 241, 232, 0.86);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-bottom-color: var(--line);
+  }
+  .nav {
+    display: flex; align-items: center; justify-content: space-between;
+    height: 72px;
+  }
+  .brand {
+    display: flex; align-items: center; gap: 10px;
+    font-family: var(--font-display); font-weight: 680; font-size: 19px;
+    color: var(--ink); text-decoration: none; letter-spacing: -0.01em;
+  }
+  .brand-mark {
+    width: 34px; height: 34px; border-radius: 10px;
+    background: var(--forest); color: #F3EBDD;
+    display: inline-flex; align-items: center; justify-content: center;
+    transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .brand:hover .brand-mark { transform: rotate(-10deg) scale(1.08); }
+  .nav-links { display: flex; align-items: center; gap: 28px; }
+  .nav-links a {
+    color: var(--ink-soft); text-decoration: none; font-size: 14.5px; font-weight: 500;
+    position: relative; transition: color 0.2s ease;
+  }
+  .nav-links a::after {
+    content: ""; position: absolute; left: 0; bottom: -5px; height: 2px; width: 0;
+    background: var(--accent); border-radius: 2px; transition: width 0.25s ease;
+  }
+  .nav-links a:hover { color: var(--ink); }
+  .nav-links a:hover::after { width: 100%; }
+  .nav-cta {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--ink); color: #F6EFE3 !important;
+    padding: 9px 18px; border-radius: 999px; font-size: 14px !important;
+    transition: background 0.2s ease, transform 0.2s ease;
+  }
+  .nav-cta::after { display: none; }
+  .nav-cta:hover { background: var(--accent-deep); transform: translateY(-1px); }
+
+  /* ---------- Buttons ---------- */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+    font-family: var(--font-body); font-weight: 600; font-size: 15.5px;
+    padding: 15px 30px; border-radius: 999px; text-decoration: none;
+    cursor: pointer; border: none;
+    transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.22s ease, background 0.22s ease;
+    will-change: transform;
+  }
+  .btn svg { transition: transform 0.25s ease; }
+  .btn:hover svg { transform: translateX(4px); }
+  .btn-primary {
+    background: var(--accent); color: #FFF8F0;
+    box-shadow: 0 2px 6px rgba(162, 66, 30, 0.28), 0 12px 28px rgba(162, 66, 30, 0.22);
+  }
+  .btn-primary:hover { background: var(--accent-deep); transform: translateY(-3px); box-shadow: 0 4px 10px rgba(162, 66, 30, 0.3), 0 18px 40px rgba(162, 66, 30, 0.28); }
+  .btn-primary:active { transform: translateY(-1px) scale(0.98); }
+  .btn-ghost {
+    background: transparent; color: var(--ink);
+    border: 1.5px solid var(--line);
+  }
+  .btn-ghost:hover { border-color: var(--ink); transform: translateY(-2px); background: var(--surface); }
+
+  /* ---------- Hero ---------- */
+  .hero { padding: 172px 0 96px; position: relative; }
+  .hero::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background:
+      radial-gradient(680px 340px at 88% 6%, rgba(217, 164, 65, 0.14), transparent 70%),
+      radial-gradient(720px 420px at 4% 88%, rgba(46, 75, 63, 0.09), transparent 70%);
+  }
+  .hero .wrap { position: relative; display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 64px; align-items: center; }
+
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 12.5px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase;
+    color: var(--accent-deep); background: var(--accent-tint);
+    border: 1px solid #EBCDB8;
+    padding: 7px 14px; border-radius: 999px; margin-bottom: 26px;
+  }
+  .eyebrow .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); animation: blink 2.2s ease infinite; }
+  @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+  h1 {
+    font-family: var(--font-display); font-weight: 560;
+    font-size: clamp(40px, 5.2vw, 62px);
+    line-height: 1.06; letter-spacing: -0.02em;
+    margin-bottom: 24px;
+  }
+  h1 em { font-style: italic; font-weight: 480; color: var(--accent-deep); }
+
+  .hero-sub {
+    font-size: 18px; color: var(--ink-soft); max-width: 480px;
+    margin-bottom: 36px; line-height: 1.65;
+  }
+  .hero-actions { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+  .hero-note { margin-top: 18px; font-size: 13.5px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+  .hero-note svg { color: var(--forest); flex-shrink: 0; }
+
+  /* ---------- Hero mock ---------- */
+  .hero-visual { position: relative; min-height: 420px; }
+  .mock-run {
+    position: relative; z-index: 2;
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: 20px; padding: 22px 22px 18px;
+    box-shadow: var(--shadow-lg);
+    animation: floaty 7s ease-in-out infinite;
+    max-width: 420px; margin-left: auto;
+  }
+  @keyframes floaty { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
+
+  .mock-run-head { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+  .mock-dot { width: 9px; height: 9px; border-radius: 50%; background: #3E8E5C; box-shadow: 0 0 0 3px rgba(62, 142, 92, 0.16); }
+  .mock-title { font-weight: 700; font-size: 15px; }
+  .mock-count { margin-left: auto; font-size: 13px; font-weight: 600; color: var(--accent-deep); background: var(--accent-tint); padding: 3px 10px; border-radius: 999px; }
+  .mock-kw { font-size: 12.5px; color: var(--muted); margin-bottom: 14px; }
+  .mock-pill {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-size: 12px; font-weight: 600; color: var(--forest);
+    background: var(--forest-tint); border: 1px solid #D3E0D6;
+    padding: 5px 12px; border-radius: 999px; margin-bottom: 14px;
+  }
+  .mock-pill svg { animation: blink 2.6s ease infinite; }
+  .mock-jobs { border-top: 1px solid var(--line); }
+  .mock-job {
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    padding: 11px 2px; border-bottom: 1px solid var(--paper-deep);
+    transition: background 0.2s ease, padding 0.2s ease; border-radius: 6px;
+  }
+  .mock-job:hover { background: var(--paper); padding-left: 8px; padding-right: 8px; }
+  .mock-job:last-child { border-bottom: none; }
+  .mock-job b { font-size: 13px; font-weight: 600; display: block; }
+  .mock-job span { font-size: 11.5px; color: var(--muted); }
+  .mock-tag { font-size: 10.5px; font-weight: 700; color: var(--forest); background: var(--forest-tint); padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+
+  .mock-tg {
+    position: absolute; z-index: 3; left: -6px; bottom: 12px;
+    background: var(--forest); color: #EDF3EE;
+    border-radius: 16px 16px 16px 4px; padding: 14px 18px;
+    font-size: 12.5px; line-height: 1.55; max-width: 250px;
+    box-shadow: var(--shadow-md);
+    animation: floaty 7s ease-in-out infinite 1.2s;
+  }
+  .mock-tg b { display: block; font-size: 12px; letter-spacing: 0.02em; margin-bottom: 4px; color: #C9DACE; }
+  .mock-tg .tg-badge { margin-top: 8px; display: inline-block; background: rgba(255,255,255,0.12); padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+
+  .mock-spark {
+    position: absolute; z-index: 1; top: -22px; right: 12px;
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: 12px; padding: 8px 14px;
+    font-size: 12px; font-weight: 600; color: var(--ink-soft);
+    box-shadow: var(--shadow-sm);
+    animation: floaty 6s ease-in-out infinite 2.2s;
+    display: flex; align-items: center; gap: 7px;
+  }
+  .mock-spark svg { color: var(--gold); }
+
+  /* ---------- Stats strip ---------- */
+  .stats { padding: 26px 0 84px; }
+  .stats .wrap {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px;
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 30px 34px; box-shadow: var(--shadow-sm);
+  }
+  .stat b {
+    font-family: var(--font-display); font-weight: 680; font-size: 34px;
+    color: var(--ink); display: block; letter-spacing: -0.02em; line-height: 1.1;
+  }
+  .stat b sup { font-size: 18px; color: var(--accent-deep); }
+  .stat span { font-size: 13px; color: var(--muted); }
+
+  /* ---------- Section headers ---------- */
+  section { position: relative; }
+  .sec-head { max-width: 640px; margin: 0 auto 56px; text-align: center; }
+  .sec-kicker {
+    font-size: 12.5px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--accent-deep); margin-bottom: 14px; display: block;
+  }
+  h2 {
+    font-family: var(--font-display); font-weight: 560;
+    font-size: clamp(30px, 3.6vw, 44px); line-height: 1.12; letter-spacing: -0.015em;
+    margin-bottom: 16px;
+  }
+  h2 em { font-style: italic; font-weight: 480; color: var(--accent-deep); }
+  .sec-sub { color: var(--ink-soft); font-size: 16.5px; }
+
+  /* ---------- How it works ---------- */
+  .how { background: var(--forest); color: #EAEFE8; padding: 96px 0 104px; border-radius: 40px 40px 0 0; }
+  .how .sec-kicker { color: var(--gold); }
+  .how h2 { color: #F5F1E6; }
+  .how h2 em { color: var(--gold); }
+  .how .sec-sub { color: #B9C6BB; }
+  .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 22px; counter-reset: step; }
+  .step {
+    background: var(--forest-deep); border: 1px solid rgba(233, 240, 232, 0.09);
+    border-radius: var(--radius); padding: 30px 26px;
+    position: relative; counter-increment: step;
+    transition: transform 0.3s ease, border-color 0.3s ease, background 0.3s ease;
+  }
+  .step:hover { transform: translateY(-6px); border-color: rgba(217, 164, 65, 0.4); background: #2A443A; }
+  .step-num {
+    font-family: var(--font-display); font-style: italic; font-weight: 480;
+    font-size: 44px; color: var(--gold); line-height: 1; display: block; margin-bottom: 18px;
+  }
+  .step-num::before { content: "0"; opacity: 0.4; }
+  .step-icon {
+    position: absolute; top: 30px; right: 24px;
+    width: 40px; height: 40px; border-radius: 12px;
+    background: rgba(217, 164, 65, 0.12); color: var(--gold);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .step h3 { font-size: 17px; font-weight: 600; color: #F5F1E6; margin-bottom: 9px; }
+  .step p { font-size: 13.8px; color: #AEBCB0; line-height: 1.6; }
+  .how-cta { text-align: center; margin-top: 52px; }
+
+  /* ---------- Features ---------- */
+  .features { padding: 104px 0; }
+  .feat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+  .feat {
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 32px 28px;
+    transition: transform 0.3s cubic-bezier(0.34, 1.3, 0.64, 1), box-shadow 0.3s ease, border-color 0.3s ease;
+    position: relative; overflow: hidden;
+  }
+  .feat::before {
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, var(--accent), var(--gold));
+    transform: scaleX(0); transform-origin: left; transition: transform 0.35s ease;
+  }
+  .feat:hover { transform: translateY(-6px); box-shadow: var(--shadow-md); border-color: #D8CBb2; }
+  .feat:hover::before { transform: scaleX(1); }
+  .feat-icon {
+    width: 48px; height: 48px; border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 20px;
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .feat:hover .feat-icon { transform: rotate(-8deg) scale(1.1); }
+  .feat:nth-child(odd) .feat-icon { background: var(--accent-tint); color: var(--accent-deep); }
+  .feat:nth-child(even) .feat-icon { background: var(--forest-tint); color: var(--forest); }
+  .feat h3 { font-size: 17.5px; font-weight: 700; margin-bottom: 9px; letter-spacing: -0.01em; }
+  .feat p { font-size: 14.2px; color: var(--ink-soft); line-height: 1.65; }
+
+  /* ---------- Final CTA ---------- */
+  .final {
+    padding: 96px 0 110px;
+    background:
+      radial-gradient(560px 300px at 14% 20%, rgba(217, 164, 65, 0.16), transparent 70%),
+      var(--paper-deep);
+    border-top: 1px solid var(--line);
+    text-align: center;
+  }
+  .final h2 { max-width: 640px; margin-left: auto; margin-right: auto; }
+  .final .sec-sub { max-width: 520px; margin: 0 auto 36px; }
+
+  /* ---------- Footer ---------- */
+  footer { background: var(--ink); color: #A99F8E; padding: 52px 0 40px; }
+  .foot { display: flex; justify-content: space-between; align-items: flex-start; gap: 40px; flex-wrap: wrap; }
+  .foot .brand { color: #F0E8D8; margin-bottom: 12px; }
+  .foot .brand-mark { background: var(--accent); }
+  .foot-tag { font-size: 13px; max-width: 300px; line-height: 1.6; }
+  .foot-cols { display: flex; gap: 72px; }
+  .foot-col b { display: block; color: #E8DFCC; font-size: 13px; font-weight: 600; margin-bottom: 14px; letter-spacing: 0.04em; text-transform: uppercase; }
+  .foot-col a { display: block; color: #A99F8E; text-decoration: none; font-size: 14px; margin-bottom: 10px; transition: color 0.2s ease, transform 0.2s ease; }
+  .foot-col a:hover { color: #F0E8D8; transform: translateX(3px); }
+  .foot-base {
+    border-top: 1px solid rgba(240, 232, 216, 0.12); margin-top: 44px; padding-top: 24px;
+    display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+    font-size: 12.5px; color: #857B69;
+  }
+
+  /* ---------- Reveal animations ---------- */
+  .reveal { opacity: 0; transform: translateY(28px); transition: opacity 0.7s ease, transform 0.7s cubic-bezier(0.22, 1, 0.36, 1); }
+  .reveal-left { opacity: 0; transform: translateX(-36px); transition: opacity 0.75s ease, transform 0.75s cubic-bezier(0.22, 1, 0.36, 1); }
+  .reveal-right { opacity: 0; transform: translateX(36px); transition: opacity 0.75s ease, transform 0.75s cubic-bezier(0.22, 1, 0.36, 1); }
+  .reveal.is-in, .reveal-left.is-in, .reveal-right.is-in { opacity: 1; transform: none; }
+  .d1 { transition-delay: 0.08s; } .d2 { transition-delay: 0.16s; } .d3 { transition-delay: 0.24s; }
+  .d4 { transition-delay: 0.32s; } .d5 { transition-delay: 0.4s; } .d6 { transition-delay: 0.48s; }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after { animation: none !important; transition-duration: 0.01ms !important; }
+    .reveal, .reveal-left, .reveal-right { opacity: 1; transform: none; }
+  }
+
+  /* ---------- Responsive ---------- */
+  @media (max-width: 960px) {
+    .hero { padding: 140px 0 72px; }
+    .hero .wrap { grid-template-columns: 1fr; gap: 56px; }
+    .hero-visual { min-height: 0; }
+    .mock-run { margin: 0 auto; }
+    .mock-tg { left: 0; }
+    .steps { grid-template-columns: repeat(2, 1fr); }
+    .feat-grid { grid-template-columns: repeat(2, 1fr); }
+    .stats .wrap { grid-template-columns: repeat(2, 1fr); row-gap: 28px; }
+  }
+  @media (max-width: 600px) {
+    .nav-links a:not(.nav-cta) { display: none; }
+    .hero { padding: 120px 0 64px; }
+    h1 { font-size: 38px; }
+    .hero-actions .btn { width: 100%; }
+    .steps { grid-template-columns: 1fr; }
+    .feat-grid { grid-template-columns: 1fr; }
+    .stats .wrap { grid-template-columns: repeat(2, 1fr); padding: 24px; }
+    .foot-cols { gap: 40px; }
+    .mock-spark { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ======================= HEADER ======================= -->
+<header id="topbar">
+  <div class="wrap nav">
+    <a class="brand" href="#top">
+      <span class="brand-mark">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 5 13h5l-1 9 8-11h-5l1-9z"/></svg>
+      </span>
+      Job Portal
+    </a>
+    <nav class="nav-links">
+      <a href="#how">How it works</a>
+      <a href="#features">Features</a>
+      <a class="nav-cta" href="/login">
+        Sign in
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
+      </a>
+    </nav>
+  </div>
+</header>
+
+<!-- ======================= HERO ======================= -->
+<section class="hero" id="top">
+  <div class="wrap">
+    <div>
+      <span class="eyebrow reveal"><span class="dot"></span> LinkedIn &amp; Upwork, monitored for you</span>
+      <h1 class="reveal d1">Know the moment the <em>right job</em> shows&nbsp;up.</h1>
+      <p class="hero-sub reveal d2">
+        Job Portal watches the job boards around the clock for roles matching your saved
+        searches — then delivers fresh matches straight to your Telegram, so you apply
+        before everyone else even refreshes.
+      </p>
+      <div class="hero-actions reveal d3">
+        <a class="btn btn-primary" href="/login">
+          Get started — it's free
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
+        </a>
+        <a class="btn btn-ghost" href="#how">See how it works</a>
+      </div>
+      <div class="hero-note reveal d4">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 6v5c0 5 3.4 8.6 8 10 4.6-1.4 8-5 8-10V6l-8-3z"/><path d="m9 12 2 2 4-4"/></svg>
+        Private by design — your searches and alerts belong to your account alone.
+      </div>
+    </div>
+
+    <div class="hero-visual reveal-right d2">
+      <div class="mock-spark">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 5 13h5l-1 9 8-11h-5l1-8z"/></svg>
+        Checked every few seconds
+      </div>
+
+      <div class="mock-run">
+        <div class="mock-run-head">
+          <span class="mock-dot"></span>
+          <span class="mock-title">LinkedIn</span>
+          <span class="mock-count">4 new</span>
+        </div>
+        <div class="mock-kw">PHP Developer · Canada · last 24 hours</div>
+        <span class="mock-pill">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 5 13h5l-1 9 8-11h-5l1-8z"/></svg>
+          Summary sent to Telegram
+        </span>
+        <div class="mock-jobs">
+          <div class="mock-job">
+            <div><b>Senior Software Engineer</b><span>Voices · Alberta, Canada</span></div>
+            <span class="mock-tag">new</span>
+          </div>
+          <div class="mock-job">
+            <div><b>Développeur PHP</b><span>DELAN IT · Montréal, Canada</span></div>
+            <span class="mock-tag">new</span>
+          </div>
+          <div class="mock-job">
+            <div><b>Full Stack Developer</b><span>Upwork · $10–15/hr · hourly</span></div>
+            <span class="mock-tag">new</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="mock-tg">
+        <b>Job Portal</b>
+        LinkedIn run complete<br />
+        Search: PHP Developer<br />
+        Fetched: 26 · New: 4
+        <span class="tg-badge">delivered just now</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= STATS ======================= -->
+<div class="stats">
+  <div class="wrap reveal">
+    <div class="stat"><b><span data-count="26">0</span></b><span>jobs scanned in a single daily sweep</span></div>
+    <div class="stat"><b><span data-count="4">0</span></b><span>genuinely new ones flagged after de-duplication</span></div>
+    <div class="stat"><b><span data-count="2">0</span></b><span>job boards watched at once — LinkedIn &amp; Upwork</span></div>
+    <div class="stat"><b><span data-count="2">0</span><sup>min</sup></b><span>to set up your first saved search</span></div>
+  </div>
+</div>
+
+<!-- ======================= HOW IT WORKS ======================= -->
+<section class="how" id="how">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="sec-kicker">How it works</span>
+      <h2>Set it once. <em>It hunts while you don't.</em></h2>
+      <p class="sec-sub">No refreshing job boards. No re-reading the same listings. Four steps and the bot takes the night shift.</p>
+    </div>
+
+    <div class="steps">
+      <div class="step reveal d1">
+        <span class="step-num">1</span>
+        <span class="step-icon">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        </span>
+        <h3>Create a search</h3>
+        <p>Type your keywords — "PHP Developer", "React", anything — pick your countries, and choose a window: last 24 hours, week, or month.</p>
+      </div>
+
+      <div class="step reveal d2">
+        <span class="step-num">2</span>
+        <span class="step-icon">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>
+        </span>
+        <h3>Put it on a schedule</h3>
+        <p>Hourly, daily, or weekly sweeps — or hit "Run now" whenever you want a fresh look. Missed schedules catch up automatically.</p>
+      </div>
+
+      <div class="step reveal d3">
+        <span class="step-num">3</span>
+        <span class="step-icon">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16l-6.5 8v5l-3 2v-7L4 5z"/></svg>
+        </span>
+        <h3>It scans &amp; filters</h3>
+        <p>Every run fetches live listings in real time, drops anything outside your time window, and skips jobs you've already been told about.</p>
+      </div>
+
+      <div class="step reveal d4">
+        <span class="step-num">4</span>
+        <span class="step-icon">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9a6 6 0 1 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10 19a2 2 0 0 0 4 0"/></svg>
+        </span>
+        <h3>Fresh matches reach you</h3>
+        <p>A summary lands in Telegram the moment a run finds something new — and the full listings wait in your dashboard, ready to open.</p>
+      </div>
+    </div>
+
+    <div class="how-cta reveal">
+      <a class="btn btn-primary" href="/login">
+        Set up your first search
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= FEATURES ======================= -->
+<section class="features" id="features">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="sec-kicker">Features</span>
+      <h2>Built like an assistant <em>who never sleeps in.</em></h2>
+      <p class="sec-sub">Everything below already works today — no beta promises, no waitlist.</p>
+    </div>
+
+    <div class="feat-grid">
+      <div class="feat reveal d1">
+        <span class="feat-icon">
+          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/><path d="M8 11h6M11 8v6"/></svg>
+        </span>
+        <h3>Saved searches, your rules</h3>
+        <p>Keywords, multiple countries, free-form tags, and a time window — last 24 hours, week, or month. Tune it until the matches feel hand-picked.</p>
+      </div>
+
+      <div class="feat reveal d2">
+        <span class="feat-icon">
+          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>
+        </span>
+        <h3>Truly hands-off scheduling</h3>
+        <p>Hourly, daily, or weekly triggers with live countdowns. If your machine was off, missed sweeps catch up on the next start — one run, never a pile-up.</p>
+      </div>
+
+      <div class="feat reveal d3">
+        <span class="feat-icon">
+          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
+        </span>
+        <h3>Only genuinely new jobs count</h3>
+        <p>A persistent memory of everything already delivered means "new" means new. The same listing never bugs you twice.</p>
+      </div>
+
+      <div class="feat reveal d4">
+        <span class="feat-icon">
+          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9a6 6 0 1 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10 19a2 2 0 0 0 4 0"/></svg>
+        </span>
+        <h3>Alerts where you actually look</h3>
+        <p>Run summaries arrive as Telegram messages — what was searched, how much was fetched, and how many are new. Zero-email-inbox noise.</p>
+      </div>
+
+      <div class="feat reveal d5">
+        <span class="feat-icon">
+          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg>
+        </span>
+        <h3>Every run, on the record</h3>
+        <p>Full run history with fetched and new counts, delivery status, and a live view while a sweep is in progress. Nothing happens in the dark.</p>
+      </div>
+
+      <div class="feat reveal d6">
+        <span class="feat-icon">
+          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V4H6.5A2.5 2.5 0 0 0 4 6.5v13z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/></svg>
+        </span>
+        <h3>Job details, one click deep</h3>
+        <p>Open any match for the full description, salary or budget, experience level, company or client info — and a straight link to apply.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= FINAL CTA ======================= -->
+<section class="final">
+  <div class="wrap">
+    <span class="sec-kicker reveal">Ready when you are</span>
+    <h2 class="reveal d1">Your next role won't wait <em>in your inbox.</em></h2>
+    <p class="sec-sub reveal d2">Create an account, save your first search, and let the first sweep run before your coffee's ready.</p>
+    <div class="reveal d3">
+      <a class="btn btn-primary" href="/login">
+        Create your free account
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= FOOTER ======================= -->
+<footer>
+  <div class="wrap">
+    <div class="foot">
+      <div>
+        <a class="brand" href="#top">
+          <span class="brand-mark">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 5 13h5l-1 9 8-11h-5l1-9z"/></svg>
+          </span>
+          Job Portal
+        </a>
+        <p class="foot-tag">Personal job monitoring for people who'd rather apply first than scroll longest.</p>
+      </div>
+      <div class="foot-cols">
+        <div class="foot-col">
+          <b>Product</b>
+          <a href="#how">How it works</a>
+          <a href="#features">Features</a>
+        </div>
+        <div class="foot-col">
+          <b>Account</b>
+          <a href="/login">Sign in</a>
+          <a href="/login">Create account</a>
+        </div>
+      </div>
+    </div>
+    <div class="foot-base">
+      <span>© 2026 Job Portal. Runs locally, stays yours.</span>
+      <span>Made for job seekers, not recruiters.</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // Sticky header treatment
+  const topbar = document.getElementById('topbar');
+  const onScroll = () => topbar.classList.toggle('scrolled', window.scrollY > 24);
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+
+  // Scroll-triggered reveals
+  const revealEls = document.querySelectorAll('.reveal, .reveal-left, .reveal-right');
+  if ('IntersectionObserver' in window) {
+    const io = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((e) => {
+          if (e.isIntersecting) {
+            e.target.classList.add('is-in');
+            io.unobserve(e.target);
+          }
+        });
+      },
+      { threshold: 0.15, rootMargin: '0px 0px -40px 0px' }
+    );
+    revealEls.forEach((el) => io.observe(el));
+  } else {
+    revealEls.forEach((el) => el.classList.add('is-in'));
+  }
+
+  // Animated stat counters
+  const counters = document.querySelectorAll('[data-count]');
+  const animateCount = (el) => {
+    const target = parseInt(el.dataset.count, 10);
+    const dur = 1100;
+    const t0 = performance.now();
+    const tick = (t) => {
+      const p = Math.min(1, (t - t0) / dur);
+      const eased = 1 - Math.pow(1 - p, 3);
+      el.textContent = Math.round(target * eased);
+      if (p < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  };
+  if ('IntersectionObserver' in window) {
+    const cio = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((e) => {
+          if (e.isIntersecting) {
+            animateCount(e.target);
+            cio.unobserve(e.target);
+          }
+        });
+      },
+      { threshold: 0.6 }
+    );
+    counters.forEach((el) => cio.observe(el));
+  } else {
+    counters.forEach((el) => (el.textContent = el.dataset.count));
+  }
+
+  // Gentle tilt on the hero mock as the pointer moves
+  const mock = document.querySelector('.mock-run');
+  if (mock && window.matchMedia('(pointer: fine)').matches) {
+    const heroVisual = document.querySelector('.hero-visual');
+    heroVisual.addEventListener('mousemove', (e) => {
+      const r = heroVisual.getBoundingClientRect();
+      const x = (e.clientX - r.left) / r.width - 0.5;
+      const y = (e.clientY - r.top) / r.height - 0.5;
+      mock.style.transform = `perspective(900px) rotateY(${x * 6}deg) rotateX(${-y * 5}deg)`;
+    });
+    heroVisual.addEventListener('mouseleave', () => {
+      mock.style.transform = '';
+    });
+  }
+</script>
+
+</body>
+</html>

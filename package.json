@@ -1,9 +1,9 @@
 {
-  "name": "job-alert-bot",
+  "name": "job-portal",
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Keyword-based LinkedIn & Upwork job monitoring via Apify scrapers, delivered as CSV files to Telegram on scheduled triggers",
+  "description": "Personal job portal — monitors LinkedIn & Upwork for saved searches and delivers fresh matches to Telegram",
   "engines": {
     "node": ">=22.5"
   },
@@ -14,11 +14,13 @@
   },
   "dependencies": {
     "apify-client": "^2.12.0",
+    "bcryptjs": "^3.0.3",
     "dotenv": "^16.4.5",
     "express": "^4.21.2",
     "mysql2": "^3.24.3",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.30.6"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
