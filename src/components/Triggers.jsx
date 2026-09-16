@@ -336,6 +336,7 @@ export function TriggerForm({ mode = 'create', initial, searches, onDone, onCanc
 }
 
 function TriggerRow({ trigger, onRunStarted, onEdit, onDuplicate, onChanged }) {
+  const navigate = useNavigate();
   const [confirming, setConfirming] = useState(false);
 
   const runNow = async () => {

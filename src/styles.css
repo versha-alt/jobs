@@ -2624,3 +2624,148 @@ a:hover {
   border-radius: 8px;
   padding: 8px 12px;
 }
+
+/* ---------- Schedule detail ---------- */
+.sd-back {
+  margin-bottom: 14px;
+}
+
+.sd-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.sd-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(22px, 3vw, 30px);
+  font-weight: 560;
+  letter-spacing: -0.015em;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.sd-summary {
+  margin-top: 7px;
+  font-size: 13.5px;
+  color: var(--muted);
+}
+
+.sd-kw {
+  color: var(--text-2);
+  font-weight: 500;
+}
+
+.sd-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sd-tabs {
+  margin-bottom: 22px;
+}
+
+.sd-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 14px 20px;
+  padding: 16px 18px;
+}
+
+.sd-trigger {
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 640px;
+}
+
+.sd-trigger .jd-field {
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--surface-2);
+  padding-bottom: 9px;
+}
+
+.sd-trigger-foot {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 4px;
+}
+
+.dl-row-hist,
+.dl-head-hist {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) 90px 90px 40px;
+  gap: 14px;
+  align-items: center;
+  padding: 12px 16px;
+}
+
+.dl-row-hist {
+  cursor: pointer;
+  border-top: 1px solid var(--border);
+  transition: background 0.15s ease;
+}
+
+.dl-head-hist {
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.dl-row-hist:hover {
+  background: var(--bg);
+}
+
+.dl-row-open {
+  background: var(--accent-tint);
+}
+
+.sd-run-title {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 560;
+  letter-spacing: -0.01em;
+  margin: 4px 0 12px;
+}
+
+.sd-log {
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sd-log-line {
+  display: flex;
+  gap: 14px;
+  font-size: 12.5px;
+  align-items: baseline;
+}
+
+.sd-log-t {
+  color: var(--muted);
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: 11.5px;
+}
+
+.sd-log-msg {
+  color: var(--text-2);
+}
+
+.empty-card {
+  padding: 26px;
+  text-align: center;
+  color: var(--muted);
+  margin-top: 14px;
+}

@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
 import { AnimatePresence, MotionConfig, motion } from 'framer-motion';
 import { api } from './api.js';
 import { onToast, toast } from './toast.js';
@@ -13,6 +13,7 @@ import JobDetail from './components/JobDetail.jsx';
 import Jobs from './components/Jobs.jsx';
 import JobsDetail from './components/JobsDetail.jsx';
 import AuthPage from './components/AuthPage.jsx';
+import ScheduleDetail from './components/ScheduleDetail.jsx';
 import Settings from './components/Settings.jsx';
 
 const TABS = [
@@ -222,6 +223,7 @@ function Overview({ searches, triggers, runs, onGoTo }) {
 function Dashboard() {
   const { user, setUser } = useAuth();
   const navigate = useNavigate();
+  const { scheduleId, runId } = useParams();
   const [tab, setTab] = useState('overview');
   const [countries, setCountries] = useState([]);
   const [searches, setSearches] = useState(null);
@@ -392,7 +394,14 @@ function Dashboard() {
 
         <div className="canvas">
           <div className="shell">
-            {jobView ? (
+            {scheduleId ? (
+              <ScheduleDetail
+                scheduleId={scheduleId}
+                runId={runId}
+                searches={searches ?? []}
+                onRunStarted={() => loadRuns()}
+              />
+            ) : jobView ? (
           <JobDetail
             runId={jobView.runId}
             jobRef={{ source: jobView.source, jobId: jobView.jobId }}
@@ -507,6 +516,8 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<LoginRoute />} />
           <Route path="/dashboard" element={<RequireAuth><Dashboard /></RequireAuth>} />
+          <Route path="/schedule/:scheduleId" element={<RequireAuth><Dashboard /></RequireAuth>} />
+          <Route path="/schedule/:scheduleId/history/:runId" element={<RequireAuth><Dashboard /></RequireAuth>} />
           <Route path="*" element={<CatchAll />} />
         </Routes>
         <ToastHost />

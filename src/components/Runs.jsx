@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { api } from '../api.js';
 import { toast } from '../toast.js';
@@ -26,6 +27,7 @@ function DeliveryBadge({ delivery }) {
 }
 
 function RunCard({ run, searchLabel, onDeleted, onOpenJobs, onOpenJob, highlighted }) {
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [jobs, setJobs] = useState(null);
   const [loadingJobs, setLoadingJobs] = useState(false);
@@ -118,6 +120,20 @@ function RunCard({ run, searchLabel, onDeleted, onOpenJobs, onOpenJob, highlight
         >
           <Icon name="list" />
         </button>
+        {run.trigger_id && (
+          <button
+            type="button"
+            className="btn btn-icon btn-ghost"
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/schedule/${run.trigger_id}`);
+            }}
+            aria-label="Open parent schedule"
+            title="Open parent schedule"
+          >
+            <Icon name="clock" />
+          </button>
+        )}
         <button
           type="button"
           className={`btn btn-icon ${confirming ? 'btn-danger' : 'btn-ghost'}`}

@@ -13,8 +13,8 @@ export function isRunning(triggerId) {
 
 export async function insertRun(record) {
   await run(
-    `INSERT INTO runs (id, user_id, trigger_id, module, search_id, status, total_found, new_jobs_count, delivery, error, new_jobs, all_jobs, started_at, finished_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO runs (id, user_id, trigger_id, module, search_id, status, total_found, new_jobs_count, delivery, error, new_jobs, all_jobs, started_at, finished_at, manual)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       record.id,
       record.user_id ?? null,
@@ -30,6 +30,7 @@ export async function insertRun(record) {
       record.all_jobs ?? '[]',
       record.started_at,
       record.finished_at,
+      record.manual ? 1 : 0,
     ]
   );
 }
