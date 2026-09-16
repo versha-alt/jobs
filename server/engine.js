@@ -7,18 +7,30 @@ import { computeNextRun, uid, nowIso } from './util.js';
 import { saveJobsForRun } from './jobsService.js';
 const inflight = new Set();
 
+function parseRoutineAsSearch(routine) {
+  const list = (v) => (typeof v === 'string' ? JSON.parse(v || '[]') : v ?? []);
+  return {
+    id: routine.id,
+    keywords: list(routine.keywords),
+    locations: list(routine.locations),
+    time_filter: routine.posted_within,
+    tags: list(routine.tags),
+  };
+}
+
 export function isRunning(triggerId) {
   return inflight.has(triggerId);
 }
 
 export async function insertRun(record) {
   await run(
-    `INSERT INTO runs (id, user_id, trigger_id, module, search_id, status, total_found, new_jobs_count, delivery, error, new_jobs, all_jobs, started_at, finished_at, manual)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO runs (id, user_id, trigger_id, routine_id, module, search_id, status, total_found, new_jobs_count, delivery, error, new_jobs, all_jobs, started_at, finished_at, manual)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       record.id,
       record.user_id ?? null,
-      record.trigger_id,
+      record.trigger_id ?? null,
+      record.routine_id ?? null,
       record.module,
       record.search_id,
       record.status,
@@ -72,6 +84,7 @@ export async function runSearchOnce({ runId, triggerId, module, search, moduleIn
     id: runId,
     manual: manual ? 1 : 0,
     user_id: userId ?? search.user_id ?? null,
+    routine_id: search.id,
     trigger_id: triggerId,
     module: module.id,
     search_id: search.id,
@@ -170,41 +183,24 @@ export async function runSearchOnce({ runId, triggerId, module, search, moduleIn
   }
 }
 
-export async function fireTrigger(trigger, { manual = false, runId = uid('run') } = {}) {
-  if (inflight.has(trigger.id)) return null;
-  inflight.add(trigger.id);
+export async function fireRoutine(routine, schedule = null, { manual = false, runId = uid('run') } = {}) {
+  if (inflight.has(routine.id)) return null;
+  inflight.add(routine.id);
   try {
-    const row = await get('SELECT * FROM searches WHERE id = ?', [trigger.linked_search_id]);
-    if (!row) {
-      await insertRun({
-        id: runId,
-        user_id: trigger.user_id ?? null,
-        trigger_id: trigger.id,
-        module: trigger.module,
-        search_id: trigger.linked_search_id,
-        status: 'error',
-        total_found: 0,
-        new_jobs_count: 0,
-        delivery: 'skipped',
-        error: 'Linked search no longer exists',
-        new_jobs: '[]',
-        started_at: nowIso(),
-        finished_at: nowIso(),
-      });
-      return runId;
-    }
     await runSearchOnce({
       runId,
-      triggerId: trigger.id,
-      module: getModule(trigger.module),
-      search: parseSearchRow(row),
-      moduleInputs: trigger.module_inputs ?? {},
-      userId: trigger.user_id ?? row.user_id ?? null,
+      triggerId: schedule?.id ?? null,
+      module: getModule(routine.module),
+      search: parseRoutineAsSearch(routine),
+      moduleInputs: {
+        ...(routine.module_inputs ?? {}),
+        volume: routine.volume_per_run,
+      },
+      userId: routine.user_id ?? null,
       manual,
     });
     return runId;
   } finally {
-    inflight.delete(trigger.id);
-    if (!manual) await rescheduleTrigger(trigger);
+    inflight.delete(routine.id);
   }
 }

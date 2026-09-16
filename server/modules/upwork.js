@@ -46,7 +46,7 @@ export const upworkModule = {
   actorIdExample: 'neatrat/upwork-job-scraper',
   inputFields: [],
 
-  async fetch({ search, countries }) {
+  async fetch({ search, countries, overrides = {} }) {
     if (!config.apifyToken) return mockPairs(this.id, search, countries);
     if (!this.actorId()) {
       throw new Error(`Set ${this.actorEnv} in .env to your Apify Upwork scraper actor id`);
@@ -57,7 +57,7 @@ export const upworkModule = {
       const input = {
         query: kw,
         maxJobAge: MAX_JOB_AGE[search.time_filter] ?? MAX_JOB_AGE.week,
-        perPage: 50,
+        perPage: Math.min(Math.max(Number(overrides.volume) || 10, 1), 100),
         pagesToScrape: 1,
         sort: 'newest',
       };

@@ -130,7 +130,7 @@ async function bootstrap() {
   // older installs predate per-user ownership — add the columns in place
   const ownedTables = ['searches', 'triggers', 'runs'];
   const ownedCols = await all(
-    `SELECT TABLE_NAME AS tbl, COLUMN_NAME AS col FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME IN ('searches', 'triggers', 'runs', 'seen_jobs')`,
+    `SELECT TABLE_NAME AS tbl, COLUMN_NAME AS col FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME IN ('searches', 'triggers', 'runs', 'seen_jobs', 'jobs')`,
     [dbName]
   );
   const has = (tbl, col) => ownedCols.some((c) => c.tbl === tbl && c.col === col);
@@ -147,6 +147,12 @@ async function bootstrap() {
   }
   if (ownedCols.some((c) => c.tbl === 'runs') && !has('runs', 'manual')) {
     await run("ALTER TABLE runs ADD COLUMN manual TINYINT(1) NOT NULL DEFAULT 0 AFTER finished_at");
+  }
+  if (ownedCols.some((c) => c.tbl === 'runs') && !has('runs', 'routine_id')) {
+    await run('ALTER TABLE runs ADD COLUMN routine_id VARCHAR(64) NULL AFTER trigger_id');
+  }
+  if (ownedCols.some((c) => c.tbl === 'jobs') && !has('jobs', 'routine_id')) {
+    await run('ALTER TABLE jobs ADD COLUMN routine_id VARCHAR(64) NULL AFTER search_id');
   }
 
   await run(`
@@ -176,12 +182,47 @@ async function bootstrap() {
   `);
 
   await run(`
+    CREATE TABLE IF NOT EXISTS routines (
+      id VARCHAR(64) PRIMARY KEY,
+      user_id VARCHAR(64) NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      description MEDIUMTEXT NULL,
+      module VARCHAR(16) NOT NULL,
+      module_inputs MEDIUMTEXT NOT NULL,
+      keywords MEDIUMTEXT NOT NULL,
+      locations MEDIUMTEXT NOT NULL,
+      posted_within VARCHAR(16) NOT NULL DEFAULT 'week',
+      tags MEDIUMTEXT NOT NULL,
+      volume_per_run INT NOT NULL DEFAULT 10,
+      active TINYINT(1) NOT NULL DEFAULT 1,
+      created_at VARCHAR(40) NOT NULL,
+      updated_at VARCHAR(40) NOT NULL
+    )
+  `);
+  await run(`
+    CREATE TABLE IF NOT EXISTS schedules (
+      id VARCHAR(64) PRIMARY KEY,
+      user_id VARCHAR(64) NOT NULL,
+      routine_id VARCHAR(64) NOT NULL,
+      type VARCHAR(16) NOT NULL,
+      time VARCHAR(8) NOT NULL,
+      days MEDIUMTEXT NOT NULL,
+      active TINYINT(1) NOT NULL DEFAULT 1,
+      next_run_at VARCHAR(40) NULL,
+      created_at VARCHAR(40) NOT NULL,
+      updated_at VARCHAR(40) NOT NULL
+    )
+  `);
+
+  await run(`
     CREATE TABLE IF NOT EXISTS app_settings (
       skey VARCHAR(64) PRIMARY KEY,
       svalue MEDIUMTEXT NOT NULL,
       updated_at VARCHAR(40) NOT NULL
     )
   `);
+
+  await migrateSearchTriggersToRoutines();
 
   const row = await get('SELECT COUNT(*) AS c FROM countries');
   if (Number(row.c) === 0) {
@@ -305,4 +346,65 @@ export async function backfillJobsIndex() {
     }
   }
   return saved;
+}
+
+/**
+ * Phase-1 migration: merge searches + triggers into routines + schedules.
+ * Idempotent — rows are keyed by their original ids, so re-running only
+ * refreshes nothing (existing ids short-circuit via INSERT IGNORE semantics).
+ */
+export async function migrateSearchTriggersToRoutines() {
+  const searches = await all('SELECT * FROM searches');
+  const triggers = await all('SELECT * FROM triggers');
+  if (searches.length === 0 && triggers.length === 0) return;
+
+  const bySearchId = new Map();
+  for (const t of triggers) {
+    const list = bySearchId.get(t.linked_search_id) ?? [];
+    list.push(t);
+    bySearchId.set(t.linked_search_id, list);
+  }
+
+  for (const search of searches) {
+    const linked = bySearchId.get(search.id) ?? [];
+    const firstWithLabel = linked.find((t) => t.label);
+    const rowsInput = linked.map((t) => {
+      try { return JSON.parse(t.module_inputs || '{}'); } catch { return {}; }
+    }).find((mi) => mi.rows != null);
+    const volume = Math.min(Math.max(Number(rowsInput?.rows) || 10, 1), 100);
+    const active = linked.some((t) => t.next_run_at != null);
+    const module = linked[0]?.module ?? 'linkedin';
+    const exists = await get('SELECT id FROM routines WHERE id = ?', [search.id]);
+    if (!exists) {
+      await run(
+        `INSERT IGNORE INTO routines (id, user_id, name, description, module, module_inputs, keywords, locations, posted_within, tags, volume_per_run, active, created_at, updated_at)
+         SELECT ?, ?, ?, '', ?, '{}', keywords, locations, time_filter, tags, ?, ?, created_at, updated_at
+         FROM searches WHERE id = ?`,
+        [search.id, search.user_id, firstWithLabel?.label ?? search.keywords, module, volume, active ? 1 : 0, search.id]
+      );
+    }
+    for (const t of linked) {
+      const schedExists = await get('SELECT id FROM schedules WHERE id = ?', [t.id]);
+      if (schedExists) continue;
+      await run(
+        `INSERT INTO schedules (id, user_id, routine_id, type, time, days, active, next_run_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
+        [t.id, search.user_id, search.id, t.frequency, t.time, t.days_of_week, t.next_run_at, t.created_at, t.updated_at]
+      );
+    }
+  }
+
+  // re-point runs and jobs at their routine
+  await run(
+    `UPDATE runs r JOIN triggers t ON t.id = r.trigger_id JOIN routines rt ON rt.id = t.linked_search_id
+     SET r.routine_id = rt.id WHERE r.routine_id IS NULL`
+  );
+  await run(
+    `UPDATE runs r JOIN routines rt ON rt.id = r.search_id
+     SET r.routine_id = rt.id WHERE r.routine_id IS NULL`
+  );
+  await run(
+    `UPDATE jobs j JOIN routines rt ON rt.id = j.search_id
+     SET j.routine_id = rt.id WHERE j.routine_id IS NULL`
+  );
 }

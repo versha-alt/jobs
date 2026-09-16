@@ -10,10 +10,22 @@ import {
 import { resetApifyClient } from './apify.js';
 import { listJobs, getJob, toggleJobFlag } from './jobsService.js';
 import { all, get, run, parseSearchRow, parseTriggerRow } from './db.js';
-import { fireTrigger } from './engine.js';
 import { telegramConfigured } from './telegram.js';
 import { config } from './config.js';
 import { getModule, listModules } from './modules/index.js';
+import {
+  listRoutines,
+  getRoutine,
+  createRoutine,
+  updateRoutine,
+  deleteRoutine,
+  replaceSchedules,
+  createSchedule,
+  deleteSchedule,
+  parseScheduleRow,
+} from './routinesService.js';
+import { fireRoutine } from './engine.js';
+import { jobsByDay, jobsByLocation, sourceYield, jobsByPlatform } from './analyticsService.js';
 import {
   uid,
   nowIso,
@@ -32,34 +44,6 @@ const bad = (res, msg) => res.status(400).json({ error: msg });
 const cleanList = (v) =>
   Array.isArray(v) ? [...new Set(v.map((x) => String(x).trim()).filter(Boolean))] : [];
 
-async function validTriggerBody(body, userId) {
-  const label = String(body.label ?? '').trim();
-  if (!label) return { error: 'Label is required' };
-  const module = String(body.module ?? '');
-  if (!MODULES.includes(module)) return { error: 'Module must be linkedin or upwork' };
-  const mod = getModule(module);
-  const linked = String(body.linked_search_id ?? '');
-  const search = await get('SELECT id FROM searches WHERE id = ? AND user_id = ?', [linked, userId]);
-  if (!search) return { error: 'Linked search not found' };
-  const frequency = String(body.frequency ?? '');
-  if (!FREQUENCIES.includes(frequency)) return { error: 'Frequency must be hourly, daily or weekly' };
-  let time = String(body.time ?? '09:00');
-  if (!/^([01]?\d|2[0-3]):[0-5]\d$/.test(time)) time = '09:00';
-  const days = cleanList(body.days_of_week).map(Number).filter((d) => d >= 1 && d <= 7);
-  if (frequency === 'weekly' && days.length === 0) {
-    return { error: 'Pick at least one day of the week' };
-  }
-  const known = new Set((mod.inputFields ?? []).map((f) => f.key));
-  const rawInputs = body.module_inputs && typeof body.module_inputs === 'object' ? body.module_inputs : {};
-  const moduleInputs = {};
-  for (const [key, value] of Object.entries(rawInputs)) {
-    if (!known.has(key)) continue;
-    if (value === null || value === undefined || value === '') continue;
-    if (Array.isArray(value) && value.length === 0) continue;
-    moduleInputs[key] = value;
-  }
-  return { label, module, linked, frequency, time, days, moduleInputs };
-}
 
 r.get('/modules', (_req, res) => {
   res.json(
@@ -125,146 +109,160 @@ r.delete('/countries/:id', requireAuth, wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 
-r.get('/searches', requireAuth, wrap(async (req, res) => {
-  res.json(
-    (await all('SELECT * FROM searches WHERE user_id = ? ORDER BY created_at DESC', [req.user.id])).map(parseSearchRow)
-  );
-}));
+const TIME_RE = /^([01]?\d|2[0-3]):[0-5]\d$/;
 
-r.get('/searches/:id', requireAuth, wrap(async (req, res) => {
-  const row = await get('SELECT * FROM searches WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
-  if (!row) return res.status(404).json({ error: 'Search not found' });
-  res.json(parseSearchRow(row));
-}));
-
-function searchPayload(body) {
+function validRoutineBody(body) {
+  const name = String(body.name ?? '').trim();
+  if (!name) return { error: 'Routine name is required' };
+  const module = String(body.module ?? '');
+  if (!MODULES.includes(module)) return { error: 'Module must be linkedin or upwork' };
   const keywords = cleanList(body.keywords);
   if (keywords.length === 0) return { error: 'At least one keyword is required' };
+  const VOLUME_LIMIT_MSG =
+    'A routine can only have 1 keyword and 1 location to keep volume per run accurate. Create separate routines for additional searches.';
+  if (keywords.length > 1) return { error: VOLUME_LIMIT_MSG };
   const locations = cleanList(body.locations);
-  const tags = cleanList(body.tags);
-  const tf = TIME_FILTERS.includes(body.time_filter) ? body.time_filter : TIME_FILTER_DEFAULT;
-  return { keywords, locations, tags, tf };
-}
-
-r.post('/searches', requireAuth, wrap(async (req, res) => {
-  const p = searchPayload(req.body ?? {});
-  if (p.error) return bad(res, p.error);
-  const id = uid('search');
-  const now = nowIso();
-  await run(
-    'INSERT INTO searches (id, user_id, keywords, locations, time_filter, tags, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-    [id, req.user.id, JSON.stringify(p.keywords), JSON.stringify(p.locations), p.tf, JSON.stringify(p.tags), now, now]
-  );
-  res.status(201).json(parseSearchRow(await get('SELECT * FROM searches WHERE id = ? AND user_id = ?', [id, req.user.id])));
-}));
-
-r.put('/searches/:id', requireAuth, wrap(async (req, res) => {
-  const existing = await get('SELECT id FROM searches WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
-  if (!existing) return res.status(404).json({ error: 'Search not found' });
-  const p = searchPayload(req.body ?? {});
-  if (p.error) return bad(res, p.error);
-  await run(
-    'UPDATE searches SET keywords = ?, locations = ?, time_filter = ?, tags = ?, updated_at = ? WHERE id = ?',
-    [JSON.stringify(p.keywords), JSON.stringify(p.locations), p.tf, JSON.stringify(p.tags), nowIso(), req.params.id]
-  );
-  res.json(parseSearchRow(await get('SELECT * FROM searches WHERE id = ? AND user_id = ?', [req.params.id, req.user.id])));
-}));
-
-r.delete('/searches/:id', requireAuth, wrap(async (req, res) => {
-  const used = (await get('SELECT COUNT(*) AS c FROM triggers WHERE linked_search_id = ?', [req.params.id])).c;
-  if (used > 0) {
-    return res.status(409).json({ error: 'This search is linked to a trigger — delete the trigger first' });
-  }
-  const result = await run('DELETE FROM searches WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
-  if (!result.affectedRows) return res.status(404).json({ error: 'Search not found' });
-  res.json({ ok: true });
-}));
-
-r.get('/triggers', requireAuth, wrap(async (req, res) => {
-  const rows = await all('SELECT * FROM triggers WHERE user_id = ? ORDER BY created_at DESC', [req.user.id]);
-  const sRows = await all('SELECT id, keywords, time_filter FROM searches');
-  const searches = {};
-  for (const s of sRows) {
-    try {
-      searches[s.id] = { id: s.id, keywords: JSON.parse(s.keywords), time_filter: s.time_filter };
-    } catch {
-      searches[s.id] = { id: s.id, keywords: [], time_filter: 'week' };
+  if (locations.length > 1) return { error: VOLUME_LIMIT_MSG };
+  const schedules = Array.isArray(body.schedules) ? body.schedules : [];
+  for (const sched of schedules) {
+    if (!FREQUENCIES.includes(sched.type)) return { error: 'Schedule type must be hourly, daily or weekly' };
+    if (!TIME_RE.test(String(sched.time ?? ''))) return { error: 'Schedule time must be HH:MM' };
+    if (sched.type === 'weekly' && cleanList(sched.days).length === 0) {
+      return { error: 'Weekly schedules need at least one day of week' };
     }
   }
-  res.json(
-    rows.map((row) => {
-      const t = parseTriggerRow(row);
-      const s = searches[t.linked_search_id];
-      return { ...t, search: s ? { id: s.id, keywords: s.keywords, time_filter: s.time_filter } : null };
-    })
-  );
+  const volume = Math.round(Number(body.volume_per_run));
+  return {
+    name,
+    module,
+    keywords,
+    locations,
+    tags: cleanList(body.tags),
+    description: String(body.description ?? '').trim(),
+    posted_within: TIME_FILTERS.includes(body.posted_within) ? body.posted_within : TIME_FILTER_DEFAULT,
+    module_inputs: body.module_inputs && typeof body.module_inputs === 'object' ? body.module_inputs : {},
+    volume_per_run: Number.isFinite(volume) ? Math.min(Math.max(volume, 1), 100) : 10,
+    active: body.active !== false,
+    schedules: schedules.map((sc) => ({
+      id: sc.id,
+      type: sc.type,
+      time: String(sc.time),
+      days: cleanList(sc.days).map(Number).filter((d) => d >= 1 && d <= 7),
+      active: sc.active !== false,
+    })),
+  };
+}
+
+function computeScheduleNext(sc) {
+  return computeNextRun(sc.type, sc.time, sc.days ?? []).toISOString();
+}
+
+r.get('/routines', requireAuth, wrap(async (req, res) => {
+  res.json(await listRoutines(req.user.id));
 }));
 
-r.post('/triggers', requireAuth, wrap(async (req, res) => {
-  const p = await validTriggerBody(req.body ?? {}, req.user.id);
+r.post('/routines', requireAuth, wrap(async (req, res) => {
+  const p = validRoutineBody(req.body ?? {});
   if (p.error) return bad(res, p.error);
-  const id = uid('trigger');
-  const now = nowIso();
-  const next = computeNextRun(p.frequency, p.time, p.days).toISOString();
-  await run(
-    'INSERT INTO triggers (id, user_id, label, module, linked_search_id, frequency, time, days_of_week, module_inputs, next_run_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    [id, req.user.id, p.label, p.module, p.linked, p.frequency, p.time, JSON.stringify(p.days), JSON.stringify(p.moduleInputs), next, now, now]
-  );
-  res.status(201).json(parseTriggerRow(await get('SELECT * FROM triggers WHERE id = ? AND user_id = ?', [id, req.user.id])));
+  if (p.schedules.length === 0) return bad(res, 'Add at least one schedule before saving');
+  const id = await createRoutine(req.user.id, p);
+  await replaceSchedules(req.user.id, id, p.schedules, computeScheduleNext);
+  res.status(201).json(await getRoutine(req.user.id, id));
 }));
 
-r.put('/triggers/:id', requireAuth, wrap(async (req, res) => {
-  const existing = await get('SELECT id FROM triggers WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
-  if (!existing) return res.status(404).json({ error: 'Trigger not found' });
-  const p = await validTriggerBody(req.body ?? {}, req.user.id);
+r.get('/routines/:id', requireAuth, wrap(async (req, res) => {
+  const routine = await getRoutine(req.user.id, req.params.id);
+  if (!routine) return res.status(404).json({ error: 'Routine not found' });
+  const stats = await get(
+    "SELECT COUNT(*) AS total, SUM(status = 'success') AS success, SUM(status = 'error') AS failed FROM runs WHERE routine_id = ? AND user_id = ?",
+    [req.params.id, req.user.id]
+  );
+  res.json({
+    ...routine,
+    run_stats: {
+      total: Number(stats.total ?? 0),
+      success: Number(stats.success ?? 0),
+      failed: Number(stats.failed ?? 0),
+    },
+  });
+}));
+
+r.put('/routines/:id', requireAuth, wrap(async (req, res) => {
+  const existing = await getRoutine(req.user.id, req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Routine not found' });
+  const p = validRoutineBody(req.body ?? {});
   if (p.error) return bad(res, p.error);
-  const next = computeNextRun(p.frequency, p.time, p.days).toISOString();
-  await run(
-    'UPDATE triggers SET label = ?, module = ?, linked_search_id = ?, frequency = ?, time = ?, days_of_week = ?, module_inputs = ?, next_run_at = ?, updated_at = ? WHERE id = ?',
-    [p.label, p.module, p.linked, p.frequency, p.time, JSON.stringify(p.days), JSON.stringify(p.moduleInputs), next, nowIso(), req.params.id]
-  );
-  res.json(parseTriggerRow(await get('SELECT * FROM triggers WHERE id = ? AND user_id = ?', [req.params.id, req.user.id])));
+  if (p.schedules.length === 0) return bad(res, 'Add at least one schedule before saving');
+  await updateRoutine(req.user.id, req.params.id, p);
+  await replaceSchedules(req.user.id, req.params.id, p.schedules, computeScheduleNext);
+  res.json(await getRoutine(req.user.id, req.params.id));
 }));
 
-r.delete('/triggers/:id', requireAuth, wrap(async (req, res) => {
-  const result = await run('DELETE FROM triggers WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
-  if (!result.affectedRows) return res.status(404).json({ error: 'Trigger not found' });
+r.delete('/routines/:id', requireAuth, wrap(async (req, res) => {
+  const ok = await deleteRoutine(req.user.id, req.params.id);
+  if (!ok) return res.status(404).json({ error: 'Routine not found' });
   res.json({ ok: true });
 }));
 
-r.post('/triggers/:id/run', requireAuth, wrap(async (req, res) => {
-  const row = await get('SELECT * FROM triggers WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
-  if (!row) return res.status(404).json({ error: 'Trigger not found' });
-  const trigger = parseTriggerRow(row);
+r.post('/routines/:id/run', requireAuth, wrap(async (req, res) => {
+  const routine = await getRoutine(req.user.id, req.params.id);
+  if (!routine) return res.status(404).json({ error: 'Routine not found' });
+  const schedule = [...routine.schedules]
+    .filter((s) => s.active)
+    .sort((a, b) => (a.next_run_at ?? '9999').localeCompare(b.next_run_at ?? '9999'))[0] ?? null;
   const runId = uid('run');
-  fireTrigger(trigger, { manual: true, runId }).catch((e) =>
-    console.error(`[run-now] trigger ${trigger.id} failed:`, e)
-  );
+  fireRoutine(routine, schedule, {
+    manual: true,
+    runId,
+  }).catch((e) => console.error(`[run-now] routine ${routine.name} failed:`, e));
   res.status(202).json({ runId });
 }));
 
-r.get('/settings/telegram', requireAuth, requireAdmin, wrap(async (_req, res) => {
-  res.json(getTelegramSettings());
+r.get('/routines/:id/runs', requireAuth, wrap(async (req, res) => {
+  const t = await get('SELECT id FROM routines WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
+  if (!t) return res.status(404).json({ error: 'Routine not found' });
+  const pageSize = Math.min(Math.max(Number(req.query.pageSize) || 15, 5), 100);
+  const page = Math.max(Number(req.query.page) || 1, 1);
+  const stats = await get(
+    "SELECT COUNT(*) AS total, SUM(status = 'success') AS success, SUM(status = 'error') AS failed FROM runs WHERE routine_id = ? AND user_id = ?",
+    [req.params.id, req.user.id]
+  );
+  const total = Number(stats.total ?? 0);
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  const safePage = Math.min(page, pageCount);
+  const offset = (safePage - 1) * pageSize;
+  const rows = await all(
+    `SELECT id, status, total_found, new_jobs_count, delivery, error, started_at, finished_at, manual
+     FROM runs WHERE routine_id = ? AND user_id = ?
+     ORDER BY started_at DESC
+     LIMIT ? OFFSET ?`,
+    [req.params.id, req.user.id, pageSize, offset]
+  );
+  res.json({
+    total,
+    success: Number(stats.success ?? 0),
+    failed: Number(stats.failed ?? 0),
+    page: safePage,
+    pageCount,
+    pageSize,
+    items: rows,
+  });
 }));
 
-r.put('/settings/telegram', requireAuth, requireAdmin, wrap(async (req, res) => {
-  const settings = await saveTelegramSettings(req.body ?? {});
-  res.json(settings);
+r.post('/routines/:id/schedules', requireAuth, wrap(async (req, res) => {
+  const routine = await getRoutine(req.user.id, req.params.id);
+  if (!routine) return res.status(404).json({ error: 'Routine not found' });
+  const sc = req.body ?? {};
+  if (!FREQUENCIES.includes(sc.type)) return bad(res, 'Schedule type must be hourly, daily or weekly');
+  if (!TIME_RE.test(String(sc.time ?? ''))) return bad(res, 'Schedule time must be HH:MM');
+  const id = await createSchedule(req.user.id, req.params.id, { ...sc, active: sc.active !== false }, nowIso(), computeScheduleNext);
+  res.status(201).json({ id, ...sc, active: sc.active !== false });
 }));
 
-r.post('/settings/telegram/test', requireAuth, requireAdmin, wrap(async (req, res) => {
-  const result = await testTelegramConnection({ sendTest: Boolean(req.body?.sendTest) });
-  res.json(result);
-}));
-
-r.get('/settings/apify', requireAuth, requireAdmin, wrap(async (_req, res) => {
-  res.json(getApifySettings());
-}));
-
-r.put('/settings/apify', requireAuth, requireAdmin, wrap(async (req, res) => {
-  const settings = await saveApifySettings(req.body ?? {});
-  resetApifyClient();
-  res.json(settings);
+r.delete('/routines/:id/schedules/:sid', requireAuth, wrap(async (req, res) => {
+  const ok = await deleteSchedule(req.user.id, req.params.id, req.params.sid);
+  if (!ok) return res.status(404).json({ error: 'Schedule not found' });
+  res.json({ ok: true });
 }));
 
 r.get('/jobs', requireAuth, wrap(async (req, res) => {
@@ -291,41 +289,27 @@ r.post('/jobs/:id/dismiss', requireAuth, wrap(async (req, res) => {
   res.json({ dismissed: value });
 }));
 
-r.get('/triggers/:id/runs', requireAuth, wrap(async (req, res) => {
-  const t = await get('SELECT id FROM triggers WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
-  if (!t) return res.status(404).json({ error: 'Schedule not found' });
-  const pageSize = Math.min(Math.max(Number(req.query.pageSize) || 15, 5), 100);
-  const page = Math.max(Number(req.query.page) || 1, 1);
-  const stats = await get(
-    "SELECT COUNT(*) AS total, SUM(status = 'success') AS success, SUM(status = 'error') AS failed FROM runs WHERE trigger_id = ? AND user_id = ?",
-    [req.params.id, req.user.id]
-  );
-  const total = Number(stats.total ?? 0);
-  const pageCount = Math.max(1, Math.ceil(total / pageSize));
-  const safePage = Math.min(page, pageCount);
-  const offset = (safePage - 1) * pageSize;
-  const rows = await all(
-    `SELECT id, status, total_found, new_jobs_count, delivery, error, started_at, finished_at, manual
-     FROM runs WHERE trigger_id = ? AND user_id = ?
-     ORDER BY started_at DESC
-     LIMIT ? OFFSET ?`,
-    [req.params.id, req.user.id, pageSize, offset]
-  );
-  res.json({
-    total: Number(total),
-    success: Number(stats.success ?? 0),
-    failed: Number(stats.failed ?? 0),
-    page: safePage,
-    pageCount,
-    pageSize,
-    items: rows,
-  });
+r.get('/analytics/jobs-by-day', requireAuth, wrap(async (req, res) => {
+  const days = Math.min(Math.max(Number(req.query.days) || 14, 7), 90);
+  res.json(await jobsByDay(req.user.id, days));
+}));
+
+r.get('/analytics/jobs-by-location', requireAuth, wrap(async (req, res) => {
+  res.json(await jobsByLocation(req.user.id, 10));
+}));
+
+r.get('/analytics/source-yield', requireAuth, wrap(async (req, res) => {
+  res.json(await sourceYield(req.user.id));
+}));
+
+r.get('/analytics/jobs-by-platform', requireAuth, wrap(async (req, res) => {
+  res.json(await jobsByPlatform(req.user.id));
 }));
 
 r.get('/runs', requireAuth, wrap(async (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 50, 200);
   const since = req.query.since;
-  const cols = 'id, trigger_id, module, search_id, status, total_found, new_jobs_count, delivery, error, started_at, finished_at';
+  const cols = 'id, trigger_id, routine_id, module, search_id, status, total_found, new_jobs_count, delivery, error, started_at, finished_at, manual';
   const rows = since
     ? await all(
         `SELECT ${cols} FROM runs WHERE user_id = ? AND finished_at > ? ORDER BY finished_at DESC LIMIT ${limit}`,

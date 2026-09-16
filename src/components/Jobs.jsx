@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { api } from '../api.js';
 import { toast } from '../toast.js';
-import { EmptyFilter, EmptyState, Icon, SkeletonRows } from './ui.jsx';
+import { EmptyFilter, EmptyState, FilterDropdown, Icon, SkeletonRows } from './ui.jsx';
 
 const PAGE_SIZES = [25, 50, 100];
 
@@ -11,6 +11,18 @@ const PERIODS = [
   ['week', 'Last week'],
   ['month', 'Last month'],
   ['custom', 'Custom range'],
+];
+
+const STATUS_OPTIONS = [
+  { value: 'active', label: 'Active' },
+  { value: 'bookmarked', label: 'Bookmarked' },
+  { value: 'dismissed', label: 'Dismissed' },
+];
+
+const PLATFORM_OPTIONS = [
+  { value: 'all', label: 'All platforms' },
+  { value: 'linkedin', label: 'LinkedIn' },
+  { value: 'upwork', label: 'Upwork' },
 ];
 
 const COLUMNS = [
@@ -43,7 +55,7 @@ function relTime(iso) {
   return `${Math.floor(s / 86400)}d ago`;
 }
 
-export default function Jobs({ searches, onOpenJob, onOpenRun }) {
+export default function Jobs({ routines, onOpenJob, onOpenRun }) {
   const [query, setQuery] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [source, setSource] = useState('all');
@@ -142,9 +154,28 @@ export default function Jobs({ searches, onOpenJob, onOpenRun }) {
   };
 
   const searchOptions = useMemo(
-    () => (searches ?? []).map((s) => ({ id: s.id, label: s.keywords.join(', ') })),
-    [searches]
+    () => (routines ?? []).map((r) => ({ id: r.id, label: r.name })),
+    [routines]
   );
+
+  const routineDdOptions = useMemo(
+    () => [{ value: 'all', label: 'All routines' }, ...searchOptions.map((s) => ({ value: s.id, label: s.label }))],
+    [searchOptions]
+  );
+
+  const runDdOptions = useMemo(
+    () => [
+      { value: 'all', label: 'All runs' },
+      ...runsList.map((r) => ({
+        value: r.id,
+        label: `${r.module === 'linkedin' ? 'LinkedIn' : 'Upwork'} run · ${relTime(r.started_at)} · ${r.total_found} fetched`,
+      })),
+    ],
+    [runsList]
+  );
+
+  const postedDdOptions = useMemo(() => PERIODS.map(([v, l]) => ({ value: v, label: `Posted: ${l}` })), []);
+  const fetchedDdOptions = useMemo(() => PERIODS.map(([v, l]) => ({ value: v, label: `Fetched: ${l}` })), []);
 
   const toggleSort = (colKey) => {
     const col = COLUMNS.find((c) => c.key === colKey);
@@ -202,123 +233,72 @@ export default function Jobs({ searches, onOpenJob, onOpenRun }) {
           ) : null}
         </div>
         <div className="lt-side">
-          <div className="lt-chiprow" role="group" aria-label="Filter by status">
-            {[
-              ['active', 'Active'],
-              ['bookmarked', 'Bookmarked'],
-              ['dismissed', 'Dismissed'],
-            ].map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                className={`lt-chip${status === value ? ' on' : ''}`}
-                onClick={() => {
-                  setStatus(value);
-                  setPage(1);
-                }}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          <div className="lt-chiprow" role="group" aria-label="Filter by platform">
-            {[
-              ['all', 'All platforms'],
-              ['linkedin', 'LinkedIn'],
-              ['upwork', 'Upwork'],
-            ].map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                className={`lt-chip${source === value ? ' on' : ''}`}
-                onClick={() => {
-                  setSource(value);
-                  setPage(1);
-                }}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="jobs-filter-row">
-        <select
-          className="jf-select"
-          value={postedPeriod}
-          onChange={(e) => {
-            setPostedPeriod(e.target.value);
-            setPage(1);
-          }}
-          aria-label="Filter by date posted"
-          title="Date posted"
-        >
-          {PERIODS.map(([v, l]) => (
-            <option key={v} value={v}>
-              Posted: {l}
-            </option>
-          ))}
-        </select>
-        <select
-          className="jf-select"
-          value={fetchedPeriod}
-          onChange={(e) => {
-            setFetchedPeriod(e.target.value);
-            setPage(1);
-          }}
-          aria-label="Filter by date fetched"
-          title="Date fetched"
-        >
-          {PERIODS.map(([v, l]) => (
-            <option key={v} value={v}>
-              Fetched: {l}
-            </option>
-          ))}
-        </select>
-        <select
-          className="jf-select"
-          value={searchId}
-          onChange={(e) => {
-            setSearchId(e.target.value);
-            setPage(1);
-          }}
-          aria-label="Filter by saved search"
-        >
-          <option value="all">All saved searches</option>
-          {searchOptions.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.label}
-            </option>
-          ))}
-        </select>
-        <select
-          className="jf-select"
-          value={runId}
-          onChange={(e) => {
-            setRunId(e.target.value);
-            setPage(1);
-          }}
-          aria-label="Filter by run"
-        >
-          <option value="all">All runs</option>
-          {runsList.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.module === 'linkedin' ? 'LinkedIn' : 'Upwork'} run · {relTime(r.started_at)} · {r.total_found} fetched
-            </option>
-          ))}
-        </select>
-        <div className="lt-search jf-loc">
-          <Icon name="globe" size={14} />
-          <input
-            value={location}
-            onChange={(e) => {
-              setLocation(e.target.value);
+          <FilterDropdown
+            ariaLabel="Filter by status"
+            options={STATUS_OPTIONS}
+            value={status}
+            onChange={(v) => {
+              setStatus(v);
               setPage(1);
             }}
-            placeholder="Location contains…"
-            aria-label="Filter by location"
           />
+          <FilterDropdown
+            ariaLabel="Filter by platform"
+            options={PLATFORM_OPTIONS}
+            value={source}
+            onChange={(v) => {
+              setSource(v);
+              setPage(1);
+            }}
+          />
+          <FilterDropdown
+            ariaLabel="Filter by date posted"
+            options={postedDdOptions}
+            value={postedPeriod}
+            onChange={(v) => {
+              setPostedPeriod(v);
+              setPage(1);
+            }}
+          />
+          <FilterDropdown
+            ariaLabel="Filter by date fetched"
+            options={fetchedDdOptions}
+            value={fetchedPeriod}
+            onChange={(v) => {
+              setFetchedPeriod(v);
+              setPage(1);
+            }}
+          />
+          <FilterDropdown
+            ariaLabel="Filter by routine"
+            options={routineDdOptions}
+            value={searchId}
+            onChange={(v) => {
+              setSearchId(v);
+              setPage(1);
+            }}
+          />
+          <FilterDropdown
+            ariaLabel="Filter by run"
+            options={runDdOptions}
+            value={runId}
+            onChange={(v) => {
+              setRunId(v);
+              setPage(1);
+            }}
+          />
+          <div className="lt-search jf-loc">
+            <Icon name="globe" size={14} />
+            <input
+              value={location}
+              onChange={(e) => {
+                setLocation(e.target.value);
+                setPage(1);
+              }}
+              placeholder="Location contains…"
+              aria-label="Filter by location"
+            />
+          </div>
         </div>
       </div>
 

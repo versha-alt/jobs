@@ -82,11 +82,15 @@ function TelegramConnection({ user }) {
             <span className="field-label">TELEGRAM_BOT_TOKEN</span>
             <div className="auth-input-wrap">
               <input
-                type={showToken ? 'text' : 'password'}
+                type="text"
+                style={showToken ? undefined : { WebkitTextSecurity: 'disc', textSecurity: 'disc' }}
                 value={botToken}
                 placeholder={info?.botTokenSet ? `${info.botTokenMask} — leave blank to keep` : '123456789:AaBbCc…'}
                 onChange={(e) => setBotToken(e.target.value)}
-                autoComplete="off"
+                autoComplete="new-password"
+                data-lpignore="true"
+                data-1p-ignore="true"
+                data-form-type="other"
               />
               <button
                 type="button"
@@ -109,6 +113,9 @@ function TelegramConnection({ user }) {
               onChange={(e) => setChatId(e.target.value)}
               placeholder="8279366380 (or -100… for groups)"
               autoComplete="off"
+              data-lpignore="true"
+              data-1p-ignore="true"
+              data-form-type="other"
             />
             <span className="hint">Where run summaries are delivered — {src('telegramChatId')}</span>
           </label>

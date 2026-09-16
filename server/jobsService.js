@@ -106,9 +106,9 @@ export async function listJobs(userId, f = {}) {
     params.push(f.source);
     where.push('j.source = ?');
   }
-  if (f.searchId && f.searchId !== 'all') {
-    params.push(f.searchId);
-    where.push('j.search_id = ?');
+  if (f.routineId && f.routineId !== 'all') {
+    params.push(f.routineId);
+    where.push('j.routine_id = ?');
   }
   if (f.runId && f.runId !== 'all') {
     params.push(f.runId);

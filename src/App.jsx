@@ -1,26 +1,22 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { BrowserRouter, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { AnimatePresence, MotionConfig, motion } from 'framer-motion';
 import { api } from './api.js';
 import { onToast, toast } from './toast.js';
 import { classifyError } from './errors.js';
 import { Countdown, CountUp, EASE, Icon, Spinner, timeAgo } from './components/ui.jsx';
-import Searches from './components/Searches.jsx';
-import Triggers from './components/Triggers.jsx';
-import Runs from './components/Runs.jsx';
-import RunJobs from './components/RunJobs.jsx';
-import JobDetail from './components/JobDetail.jsx';
 import Jobs from './components/Jobs.jsx';
 import JobsDetail from './components/JobsDetail.jsx';
 import AuthPage from './components/AuthPage.jsx';
-import ScheduleDetail from './components/ScheduleDetail.jsx';
+import Routines from './components/Routines.jsx';
+import RoutineForm from './components/RoutineForm.jsx';
+import RoutineDetail from './components/RoutineDetail.jsx';
 import Settings from './components/Settings.jsx';
+import { JobsByDayChart, JobsByLocationChart, SourceYieldChart, JobsByPlatformChart } from './components/Analytics.jsx';
 
 const TABS = [
   { id: 'overview', label: 'Overview', icon: 'grid' },
-  { id: 'searches', label: 'Searches', icon: 'search' },
-  { id: 'scheduling', label: 'Scheduling', icon: 'clock' },
-  { id: 'runs', label: 'Runs', icon: 'zap' },
+  { id: 'routines', label: 'Routines', icon: 'search' },
   { id: 'jobs', label: 'Jobs', icon: 'list' },
   { id: 'settings', label: 'Settings', icon: 'globe' },
 ];
@@ -80,15 +76,16 @@ function HealthBadge({ ok, on, off }) {
   );
 }
 
-function StatsBar({ searches, triggers, runs }) {
+function StatsBar({ routines, runs }) {
   const newJobs = (runs ?? []).reduce(
     (a, r) => a + (r.status === 'success' ? r.new_jobs_count : 0),
     0
   );
   const last = runs?.[0];
+  const activeSchedules = (routines ?? []).reduce((a, r) => a + (r.active_schedules ?? 0), 0);
   const items = [
-    { label: 'Searches', value: searches ? String(searches.length) : '–' },
-    { label: 'Triggers', value: triggers ? String(triggers.length) : '–' },
+    { label: 'Routines', value: routines ? String(routines.length) : '–' },
+    { label: 'Active schedules', value: routines ? String(activeSchedules) : '–' },
     { label: 'New jobs (recent runs)', value: runs ? <CountUp value={newJobs} /> : '–' },
     { label: 'Last run', value: last ? timeAgo(last.finished_at || last.started_at) : '–' },
   ];
@@ -135,25 +132,7 @@ function CatchAll() {
   return <Navigate to={user ? '/dashboard' : '/login'} replace />;
 }
 
-function Overview({ searches, triggers, runs, onGoTo }) {
-  const [jobStats, setJobStats] = useState(null);
-
-  useEffect(() => {
-    let alive = true;
-    Promise.all([
-      api.jobs.list({ page: 1, pageSize: 1 }),
-      api.jobs.list({ page: 1, pageSize: 1, source: 'linkedin' }),
-      api.jobs.list({ page: 1, pageSize: 1, source: 'upwork' }),
-    ])
-      .then(([all, li, up]) => {
-        if (alive) setJobStats({ total: all.total, linkedin: li.total, upwork: up.total });
-      })
-      .catch(() => {});
-    return () => {
-      alive = false;
-    };
-  }, []);
-
+function Overview({ routines, runs, onGoTo }) {
   const runsLoaded = runs ?? [];
   const okRuns = runsLoaded.filter((r) => r.status === 'success').length;
   const failedRuns = runsLoaded.filter((r) => r.status === 'error').length;
@@ -183,57 +162,50 @@ function Overview({ searches, triggers, runs, onGoTo }) {
         <h2>Overview</h2>
       </div>
 
-      <StatsBar searches={searches} triggers={triggers} runs={runs} />
+      <StatsBar routines={routines} runs={runs} />
 
       <div className="analysis-grid">
-        {card(
-          'Jobs by platform',
-          [
-            ['Total unique jobs', jobStats ? jobStats.total : <Spinner />],
-            ['LinkedIn', jobStats ? jobStats.linkedin : <Spinner />],
-            ['Upwork', jobStats ? jobStats.upwork : <Spinner />],
-          ],
-          'jobs'
-        )}
-        {card(
-          'Run outcomes (recent)',
-          [
-            ['Successful runs', okRuns],
-            ['Failed runs', failedRuns],
-            ['Runs recorded', runsLoaded.length],
-          ],
-          'runs'
-        )}
+        <JobsByPlatformChart onViewAll={() => onGoTo('jobs')} />
+        {card('Run outcomes (recent)', [
+          ['Successful runs', okRuns],
+          ['Failed runs', failedRuns],
+          ['Runs recorded', runsLoaded.length],
+        ])}
         {card(
           'Automation setup',
           [
-            ['Saved searches', searches ? searches.length : <Spinner />],
-            ['Scheduled triggers', triggers ? triggers.length : <Spinner />],
-            ['Next scheduled run', triggers && triggers.length ? (
-              <Countdown iso={[...triggers].sort((a, b) => (a.next_run_at ?? '9999').localeCompare(b.next_run_at ?? '9999'))[0].next_run_at} />
+            ['Routines', routines ? routines.length : <Spinner />],
+            ['Active schedules', routines ? routines.reduce((a, r) => a + (r.active_schedules ?? 0), 0) : <Spinner />],
+            ['Next scheduled run', routines && routines.some((r) => r.next_run_at) ? (
+              <Countdown iso={routines.filter((r) => r.next_run_at).map((r) => r.next_run_at).sort()[0]} />
             ) : '—'],
           ],
-          'scheduling'
+          'routines'
         )}
+      </div>
+
+      <div className="analysis-grid">
+        <JobsByDayChart />
+        <JobsByLocationChart />
+        <SourceYieldChart />
       </div>
     </div>
   );
 }
 
-function Dashboard() {
+function Dashboard({ routineForm }) {
   const { user, setUser } = useAuth();
   const navigate = useNavigate();
-  const { scheduleId, runId } = useParams();
-  const [tab, setTab] = useState('overview');
+  const { id: paramRoutineId, runId } = useParams();
+  const location = useLocation();
+  const [tab, setTab] = useState(() =>
+    location.pathname.startsWith('/routines') ? 'routines' : 'overview'
+  );
   const [countries, setCountries] = useState([]);
-  const [searches, setSearches] = useState(null);
-  const [triggers, setTriggers] = useState(null);
+  const [routines, setRoutines] = useState(null);
   const [runs, setRuns] = useState(null);
   const [health, setHealth] = useState(null);
-  const [highlightRunId, setHighlightRunId] = useState(null);
-  const [jobsRunId, setJobsRunId] = useState(null);
   const [jobsDetailId, setJobsDetailId] = useState(null);
-  const [jobView, setJobView] = useState(null);
   const lastSeen = useRef(new Date().toISOString());
 
   const loadCountries = useCallback(async () => {
@@ -244,17 +216,9 @@ function Dashboard() {
     }
   }, []);
 
-  const loadSearches = useCallback(async () => {
+  const loadRoutines = useCallback(async () => {
     try {
-      setSearches(await api.searches.list());
-    } catch {
-      /* server offline */
-    }
-  }, []);
-
-  const loadTriggers = useCallback(async () => {
-    try {
-      setTriggers(await api.triggers.list());
+      setRoutines(await api.routines.list());
     } catch {
       /* server offline */
     }
@@ -270,8 +234,7 @@ function Dashboard() {
 
   useEffect(() => {
     loadCountries();
-    loadSearches();
-    loadTriggers();
+    loadRoutines();
     loadRuns();
     const poll = async () => {
       try {
@@ -283,7 +246,7 @@ function Dashboard() {
     poll();
     const t = setInterval(poll, 30000);
     return () => clearInterval(t);
-  }, [loadCountries, loadSearches, loadTriggers, loadRuns]);
+  }, [loadCountries, loadRoutines, loadRuns]);
 
   // poll for finished-run toasts fast while something is in flight
   const hasActiveRuns = (runs ?? []).some((r) => r.status === 'running');
@@ -323,25 +286,11 @@ function Dashboard() {
       /* session already gone */
     }
     setUser(null);
-    setJobsRunId(null);
-    setJobView(null);
     setJobsDetailId(null);
-    setSearches(null);
-    setTriggers(null);
+    setRoutines(null);
     setRuns(null);
     navigate('/login', { replace: true });
   };
-
-  const switchToRuns = useCallback(
-    (runId) => {
-      setHighlightRunId(runId);
-      setTab('runs');
-      loadRuns();
-      setTimeout(loadRuns, 1200);
-      setTimeout(loadRuns, 3000);
-    },
-    [loadRuns]
-  );
 
   return (
     <MotionConfig reducedMotion="user">
@@ -394,91 +343,37 @@ function Dashboard() {
 
         <div className="canvas">
           <div className="shell">
-            {scheduleId ? (
-              <ScheduleDetail
-                scheduleId={scheduleId}
-                runId={runId}
-                searches={searches ?? []}
-                onRunStarted={() => loadRuns()}
+            {routineForm ? (
+              <RoutineForm mode={routineForm} routineId={paramRoutineId} reload={loadRoutines} />
+            ) : paramRoutineId ? (
+              <RoutineDetail routineId={paramRoutineId} runId={runId} />
+            ) : jobsDetailId ? (
+              <JobsDetail
+                jobId={jobsDetailId}
+                onBack={() => setJobsDetailId(null)}
+                onOpenRun={(rid) => navigate(`/routines/${rid}`)}
               />
-            ) : jobView ? (
-          <JobDetail
-            runId={jobView.runId}
-            jobRef={{ source: jobView.source, jobId: jobView.jobId }}
-            onBack={() => setJobView(null)}
-          />
-        ) : jobsDetailId ? (
-          <JobsDetail
-            jobId={jobsDetailId}
-            onBack={() => setJobsDetailId(null)}
-            onOpenRun={(runId) => {
-              setJobsDetailId(null);
-              setJobsRunId(runId);
-            }}
-          />
-        ) : jobsRunId ? (
-          <RunJobs
-            runId={jobsRunId}
-            onBack={() => setJobsRunId(null)}
-            onOpenJob={(run, job) =>
-              setJobView({ runId: run.id, source: job.source, jobId: job.job_id })
-            }
-            searchLabel={
-              ((searches ?? []).find((s) => s.id === (runs ?? []).find((r) => r.id === jobsRunId)?.search_id) ?? {})
-                .keywords?.join(', ') ?? ''
-            }
-          />
-        ) : (
-          <main className="main">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={tab}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.18, ease: EASE }}
-              >
+            ) : (
+              <main className="main">
+            <div key={tab}>
                   {tab === 'overview' && (
-                    <Overview searches={searches} triggers={triggers} runs={runs} onGoTo={setTab} />
+                    <Overview routines={routines} runs={runs} onGoTo={setTab} />
                   )}
 
-                  {tab === 'searches' && (
-                    <Searches
-                      countries={countries}
-                      searches={searches}
-                      loading={searches === null}
-                      reload={loadSearches}
-                    />
-                  )}
-
-                  {tab === 'scheduling' && (
-                    <Triggers
-                      searches={searches ?? []}
-                      triggers={triggers}
-                      loading={triggers === null}
-                      reload={loadTriggers}
-                      goToListSearches={() => setTab('searches')}
-                      onRunStarted={switchToRuns}
-                    />
-                  )}
-
-                  {tab === 'runs' && (
-                    <Runs
-                      runs={runs}
-                      loading={runs === null}
-                      reload={loadRuns}
-                      searches={searches ?? []}
-                      highlightRunId={highlightRunId}
-                      onOpenJobs={(run) => setJobsRunId(run.id)}
-                      onOpenJob={(run, job) =>
-                        setJobView({ runId: run.id, source: job.source, jobId: job.job_id })
-                      }
+                  {tab === 'routines' && (
+                    <Routines
+                      routines={routines}
+                      loading={routines === null}
+                      reload={loadRoutines}
+                      onOpen={(id) => navigate(`/routines/${id}`)}
+                      onEdit={(id) => navigate(`/routines/${id}/edit`)}
+                      onNew={() => navigate('/routines/new')}
                     />
                   )}
 
                   {tab === 'jobs' && (
                     <Jobs
-                      searches={searches ?? []}
+                      routines={routines ?? []}
                       onOpenJob={(id) => setJobsDetailId(id)}
                       onOpenRun={(runId) => setJobsRunId(runId)}
                     />
@@ -487,8 +382,7 @@ function Dashboard() {
               {tab === 'settings' && (
                 <Settings countries={countries} reload={loadCountries} user={user} />
               )}
-            </motion.div>
-          </AnimatePresence>
+            </div>
         </main>
         )}
 
@@ -516,8 +410,11 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<LoginRoute />} />
           <Route path="/dashboard" element={<RequireAuth><Dashboard /></RequireAuth>} />
-          <Route path="/schedule/:scheduleId" element={<RequireAuth><Dashboard /></RequireAuth>} />
-          <Route path="/schedule/:scheduleId/history/:runId" element={<RequireAuth><Dashboard /></RequireAuth>} />
+          <Route path="/routines" element={<RequireAuth><Dashboard /></RequireAuth>} />
+          <Route path="/routines/new" element={<RequireAuth><Dashboard routineForm="new" /></RequireAuth>} />
+          <Route path="/routines/:id/edit" element={<RequireAuth><Dashboard routineForm="edit" /></RequireAuth>} />
+          <Route path="/routines/:id" element={<RequireAuth><Dashboard /></RequireAuth>} />
+          <Route path="/routines/:id/history/:runId" element={<RequireAuth><Dashboard /></RequireAuth>} />
           <Route path="*" element={<CatchAll />} />
         </Routes>
         <ToastHost />

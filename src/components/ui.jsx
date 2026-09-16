@@ -450,6 +450,66 @@ export function ListToolbar({
   );
 }
 
+export function FilterDropdown({ options, value, onChange, icon, ariaLabel, active }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onDocDown = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    const onKey = (e) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onDocDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDocDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const current = options.find((o) => o.value === value) ?? options[0];
+  const isActive = active ?? (options.length > 0 && value !== options[0].value);
+
+  return (
+    <div className="filter-dd" ref={ref}>
+      <button
+        type="button"
+        className={`filter-dd-btn${isActive ? ' on' : ''}`}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={ariaLabel}
+        onClick={() => setOpen((o) => !o)}
+      >
+        {icon && <Icon name={icon} size={13} />}
+        <span>{current?.label ?? ''}</span>
+        <Icon name="chevron" size={11} />
+      </button>
+      {open && (
+        <div className="filter-dd-panel" role="listbox" aria-label={ariaLabel}>
+          {options.map((o) => (
+            <button
+              key={o.value}
+              type="button"
+              role="option"
+              aria-selected={o.value === value}
+              className={`filter-dd-option${o.value === value ? ' on' : ''}`}
+              onClick={() => {
+                onChange(o.value);
+                setOpen(false);
+              }}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function pageList(page, count) {
   if (count <= 7) return Array.from({ length: count }, (_, i) => i + 1);
   const set = new Set([1, 2, count - 1, count, page - 1, page, page + 1]);

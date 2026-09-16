@@ -18,16 +18,14 @@ export const linkedinModule = {
   actorEnv: 'APIFY_LINKEDIN_ACTOR_ID',
   actorId: () => config.linkedinActorId,
   actorIdExample: 'curious_coder/linkedin-jobs-scraper',
-  inputFields: [
-    { key: 'rows', label: 'Rows per search', type: 'number', required: false, default: 40 },
-  ],
+  inputFields: [],
 
   async fetch({ search, countries, overrides = {} }) {
     if (!config.apifyToken) return mockPairs(this.id, search, countries);
     if (!this.actorId()) {
       throw new Error(`Set ${this.actorEnv} in .env to your Apify LinkedIn jobs actor id`);
     }
-    const rows = Number(overrides.rows) || 40;
+    const rows = Math.min(Math.max(Number(overrides.volume) || 10, 1), 100);
     const datePosted = DATE_POSTED[search.time_filter] || DATE_POSTED.week;
     const combos = [];
     for (const keyword of search.keywords) {

@@ -39,6 +39,9 @@ async function main() {
     res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
   });
 
+  // removed/unknown API paths must 404 as JSON, never fall through to the SPA
+  app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));
+
   const dist = path.join(ROOT, 'dist');
   if (fs.existsSync(dist)) {
     // "/" shows the marketing landing page; the dashboard app lives at every
